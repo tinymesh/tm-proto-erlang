@@ -1,11 +1,11 @@
 -module(tinymesh_config).
 
--type cfgtouplet() :: {Key :: atom(), Value :: any()}.
--type cfglist() :: [cfgbin(), ...].
+-type cfgval() :: {Key :: atom(), Value :: any()}.
+-type cfglist() :: [cfgdef(), ...].
 -type cfgdef() :: {Key :: atom(),Address :: byte(),Length :: non_neg_integer()}.
 -type cfgbin() :: binary().
 
--export_type([cfgdef/0]).
+-export_type([cfglist/0]).
 
 -export([pack/1, unpack/1, pack_val/1]).
 
@@ -39,29 +39,28 @@
 ).
 
 
--spec pack(Config :: [cfgtouplet()], Acc :: [cfgtouplet()]) -> iolist().
-pack([], Acc)             -> Acc;
-pack([Cur | Config], Acc) -> pack(Config, [pack(Cur) | Acc]).
+-spec unpack(Data :: binary()) -> (Config :: [cfgval(), ...]).
+unpack(<<Data/binary>>) ->
+	unserialize_val(Data, Acc, Offset).
 
--spec unpack(Config :: cfgbin()) -> (Config :: [cfgtouplet()]).
-unpack(<<_:8, _:8>>) ->
-	[].
-
--spec pack(Config :: [cfgtouplet()]) -> iolist().
+-spec pack(Config :: [cfgval()]) -> iolist().
 pack(Config) ->
 	pack(Config, []).
 
--spec pack_val(cfgtouplet()) -> cfglist().
+-spec pack(Config :: [cfgval(),...], Acc :: [cfgval(),...]) -> iolist().
+pack([], Acc)             -> lists:reverse(Acc);
+pack([Cur | Config], Acc) -> pack(Config, [pack_val(Cur) | Acc]).
+
+
+-spec pack_val(cfgval()) -> cfglist().
 pack_val({_, Value}) when is_integer(Value), Value < 0 ->
 	[];
 
 pack_val({Key, Value}) when not is_binary(Value) ->
 	try
-		case binary:encode_unsigned(Value) of
-			A when is_binary(A) -> pack_val({Key, A});
-			_                   -> unreached
-		end
-	catch _: _ -> pack_val({Key, list_to_binary(Value)})
+		pack_val({Key, binary:encode_unsigned(Value)})
+	catch
+		_: _ -> pack_val({Key, list_to_binary(Value)})
 	end;
 
 pack_val({Key, Value}) when is_binary(Value) ->
@@ -91,35 +90,15 @@ config_lookup(Pos) ->
 		?assert([]        == pack_val({rf_power, 16#F0FF})),
 
 		%% Test multi-byte fields are packed correctly
+		M = 16#FF,
 		[P] = [B || {hw_version, B, _} <- ?CONFIGPARAMS],
-		?assert([[P, 0], [P+1, 1], [P+2, 1]] == pack_val({hw_version, 16#000101})),
-		?assert([[P, 2], [P+1, 0], [P+2, 1]] == pack_val({hw_version, 16#020001})),
-		?assert([[P, 255], [P+1, 255], [P+2, 255]] == pack_val({hw_version, 16#FFFFFF})),
-		?assert([] == pack_val({hw_version, 16#FFFFFFFF})), %% Pack 32bit into 24bit fails.
+		?assert([[P,0], [P+1,1], [P+2,1]] == pack_val({hw_version, 16#101})),
+		?assert([[P,2], [P+1,0], [P+2,1]] == pack_val({hw_version, 16#20001})),
+		?assert([[P,M], [P+1,M], [P+2,M]] == pack_val({hw_version, 16#FFFFFF})),
+		?assert([] == pack_val({hw_version, 16#FFFFFFFF})),
 
 		%% Test string fields
 		StringMatch = [[A, 0] || A <- lists:seq(60, 64)]
 		               ++ [[65, $a], [66, $b], [67, $c]],
 		?assert(StringMatch == pack_val({model, "abc"})).
 -endif.
-
-%%%%%%%%%%%%%%%%%%
-%
-%unserialize_val(<<Data/binary>>) ->
-%	unserialize_val([], Data, 0).
-%
-%unserialize_val(Acc, A, _) when byte_size(A) =:= 0 ->
-%	Acc;
-%
-%unserialize_val(Acc, Data, Offset) ->
-%	case config_lookup(Offset) of
-%		[{Key, _, Len}] ->
-%			Len2 = Len*8,
-%			<<Val:Len2/little, Tail/binary>> = Data,
-%			unserialize_val([{Key, Val}|Acc], Tail, Offset + Len);
-%		[] ->
-%			<<_:8, Tail/binary>> = Data,
-%			unserialize_val(Acc, Tail, Offset + 1)
-%	end.
-%
-%

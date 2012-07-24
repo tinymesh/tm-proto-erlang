@@ -105,4 +105,23 @@ config_lookup(Pos) ->
 		StringMatch = [[A, 0] || A <- lists:seq(60, 64)]
 		               ++ [[65, $a], [66, $b], [67, $c]],
 		?assert(StringMatch == pack_val({model, "abc"})).
+
+	pack_test() ->
+		?assert([[[0,1]], [[1,2]], [[2,2]], [[3,1]]] == pack([{rf_channel,   1},
+		                                                      {rf_power,     2},
+		                                                      {rf_data_rate, 2},
+		                                                      {protocol_mode,1}
+		                                                     ])),
+		%% Assert non existing parameters is not included
+		?assert([[[0,1]], [[1,2]], [[3,1]]]          == pack([{rf_channel,   1},
+		                                                      {rf_power,     2},
+		                                                      {non_existing, 2},
+		                                                      {protocol_mode,1}
+		                                                     ])),
+		%% Assert out of bounds variables is not included
+		?assert([[[0,1]], [[1,2]]]                   == pack([{rf_channel,   1},
+		                                                     {rf_power,     2},
+		                                                     {rf_power,     -1},
+		                                                     {hw_version,   16#FFFFFFF}
+		                                                    ])).
 -endif.

@@ -126,27 +126,9 @@ serialize(Destination, command, MsgNumber, get_status, _) ->
 serialize(Destination, command, MsgNumber, get_config, _) ->
 	<<10, Destination:32/little, MsgNumber:8, 3, 19, 0, 0>>;
 
-serialize(Destination, command, MsgNumber, _, _) ->
+serialize(_Destination, command, _MsgNumber, _, _) ->
+	error(unknown_command_encountered),
 	<<>>.
-
-%serialize(DestinationNode, PacketNumber, command, set_config, Payload) ->
-%	%% the node_id received is a quickfix, Colonel will send node_id when it
-%	%% actually is the node key in database. This is due to change and will be
-%	%% removed in the future.
-%	case list_to_binary([serialize_val(A, B) || {A, B}
-%			<- Payload, A =/= node_id]) of
-%		BinPayload when byte_size(BinPayload) =/= 0 ->
-%			%% Do not include message head when padding
-%			Padding = (32 - byte_size(BinPayload)) * 8,
-%			<<16#28,
-%			  DestinationNode:32/little,
-%			  PacketNumber:8,
-%			  3,
-%			  3,
-%			  BinPayload/binary,
-%			  0:Padding>>;
-%		_ -> <<"">>
-%	end.
 
 -spec keyorerror(Key :: atom(), List :: [{atom(), any()}], Error :: atom()) -> any().
 keyorerror(Key, List, Error) ->
@@ -190,7 +172,6 @@ keyorerror(Key, List, Error) ->
 		                                                     99, "abc">>).
 
 	serialize_serial_test() ->
-		Payload = [{serial, base64:encode("abcd")}, {packet_number, 255}],
 		?assert(<<10, 1:32/little, 255, "abcd">> == serialize(1, serial, [
 			{serial, base64:encode("abcd")}, {packet_number, 255}])).
 

@@ -80,12 +80,12 @@ unpack(Data, Acc, Offset) ->
 pack(Config) ->
 	pack(Config, []).
 
--spec pack(Config :: [cfgval(),...], Acc :: [cfgval(),...]) -> iolist().
+-spec pack(Config :: [cfgval()] | [], Acc :: ([cfgval()] | [])) -> iolist().
 pack([], Acc)             -> lists:reverse(Acc);
 pack([Cur | Config], Acc) ->
 	case pack_val(Cur) of
-		[]     -> pack(Config, Acc);
-		Packed -> pack(Config, [Packed | Acc])
+		Packed when length(Packed) >= 1 -> pack(Config, [Packed | Acc]);
+		[]     -> pack(Config, Acc)
 	end.
 
 

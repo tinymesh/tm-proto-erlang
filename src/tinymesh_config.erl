@@ -80,12 +80,12 @@ unpack(Data, Acc, Offset) ->
 pack(Config) ->
 	pack(Config, []).
 
--spec pack(Config :: [cfgval()] | [], Acc :: ([cfgval()] | [])) -> iolist().
+-spec pack(Config :: [cfgval(),...], Acc :: [cfgval(),...]) -> iolist().
 pack([], Acc)             -> lists:reverse(Acc);
 pack([Cur | Config], Acc) ->
 	case pack_val(Cur) of
-		Packed when length(Packed) >= 1 -> pack(Config, [Packed | Acc]);
-		[]     -> pack(Config, Acc)
+		[]     -> pack(Config, Acc);
+		Packed -> pack(Config, [Packed | Acc])
 	end.
 
 
@@ -104,7 +104,7 @@ pack_val({Key, Value}) when is_binary(Value) ->
 	ValueSize = byte_size(Value),
 	case lists:keyfind(Key, 1, ?CONFIGPARAMS) of
 	{_, Address, Length, _} when ValueSize =< Length ->
-		{Res, _} = lists:mapfoldl(fun(X, Acc) -> {{Acc, X}, Acc+1} end,
+		{Res, _} = lists:mapfoldl(fun(X, Acc) -> {[Acc, X], Acc+1} end,
 		                          Address, binary_to_list(
 		                           <<0:((Length-ValueSize)*8), Value/binary>>)),
 		Res;
@@ -147,36 +147,36 @@ pack_val({Key, Value}) when is_binary(Value) ->
 		?assert([] == pack_val({non_existing_config_parameter, 12345})),
 		?assert([] == pack_val({rw_power, -1})),
 		%% Test single byte fields are packed
-		?assert([{1, 20}] == pack_val({rf_power, 20})),
+		?assert([[1, 20]] == pack_val({rf_power, 20})),
 		?assert([]        == pack_val({rf_power, 16#F0FF})),
 
 		%% Test multi-byte fields are packed correctly
 		M = 16#FF,
 		[P] = [B || {hw_version, B, _, _} <- ?CONFIGPARAMS],
-		?assert([{P,0}, {P+1,1}, {P+2,1}] == pack_val({hw_version, 16#101})),
-		?assert([{P,2}, {P+1,0}, {P+2,1}] == pack_val({hw_version, 16#20001})),
-		?assert([{P,M}, {P+1,M}, {P+2,M}] == pack_val({hw_version, 16#FFFFFF})),
+		?assert([[P,0], [P+1,1], [P+2,1]] == pack_val({hw_version, 16#101})),
+		?assert([[P,2], [P+1,0], [P+2,1]] == pack_val({hw_version, 16#20001})),
+		?assert([[P,M], [P+1,M], [P+2,M]] == pack_val({hw_version, 16#FFFFFF})),
 		?assert([] == pack_val({hw_version, 16#FFFFFFFF})),
 
 		%% Test string fields
-		StringMatch = [{A, 0} || A <- lists:seq(60, 64)]
-		               ++ [{65, $a}, {66, $b}, {67, $c}],
+		StringMatch = [[A, 0]|| A <- lists:seq(60, 64)]
+		               ++ [[65, $a], [66, $b], [67, $c]],
 		?assert(StringMatch == pack_val({model, "abc"})).
 
 	pack_test() ->
-		?assert([[{0,1}], [{1,2}], [{2,2}], [{3,1}]] == pack([{rf_channel,   1},
+		?assert([[[0,1]], [[1,2]], [[2,2]], [[3,1]]] == pack([{rf_channel,   1},
 		                                                      {rf_power,     2},
 		                                                      {rf_data_rate, 2},
 		                                                      {protocol_mode,1}
 		                                                     ])),
 		%% Assert non existing parameters is not included
-		?assert([[{0,1}], [{1,2}], [{3,1}]]          == pack([{rf_channel,   1},
+		?assert([[[0,1]], [[1,2]], [[3,1]]]          == pack([{rf_channel,   1},
 		                                                      {rf_power,     2},
 		                                                      {non_existing, 2},
 		                                                      {protocol_mode,1}
 		                                                     ])),
 		%% Assert out of bounds variables is not included
-		?assert([[{0,1}], [{1,2}]]                   == pack([{rf_channel,   1},
+		?assert([[[0,1]], [[1,2]]]                   == pack([{rf_channel,   1},
 		                                                     {rf_power,     2},
 		                                                     {rf_power,     -1},
 		                                                     {hw_version,   16#FFFFFFF}

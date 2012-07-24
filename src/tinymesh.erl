@@ -95,8 +95,7 @@ unserialize_payload(_) ->
 
 	unserialize_payload_serial_test() ->
 		Serial = <<"abc">>,
-		Resp = unserialize(<<21, 1:32, 2:32, 19, 1, 1, 1:16, 0:16,
-		                     16, 0, Serial/binary>>),
+		Resp = unserialize_payload(<<16, 0, Serial/binary>>),
 		[SerialData] = [ A || {serial, A} <- Resp],
 		?assert(base64:decode(SerialData) == Serial).
 
@@ -107,11 +106,9 @@ unserialize_payload(_) ->
 
 	unserialize_payload_event_test() ->
 		BinV = 16#bb,
-		Resp = unserialize(<<16#23, 16#01, 16#00, 16#0, 16#00, 16#00, 16#1, 16#0,
-		                     16#00, 16#00, 16#00, 16#0, 16#7b, 16#9e, 16#0, 16#0,
-		                     16#02, 16#0e, 16#00, 16#0, 16#00, 16#00, 16#0, 16#0,
-		                     16#79, BinV,  16#00, 16#0, 16#00, 16#00, 16#0, 16#2,
-		                     16#00, 16#01, 16#22>>),
+		Resp = unserialize_payload(<<16#02, 16#0e, 16#00, 16#0, 16#00, 16#00, 16#0, 16#0,
+		                             16#79, BinV,  16#00, 16#0, 16#00, 16#00, 16#0, 16#2,
+		                             16#00, 16#01, 16#22>>),
 		[Voltage] = [ A || {voltage, A} <- Resp],
 		?_assert(Voltage == list_to_float(lists:flatten(io_lib:format("~.2f", [BinV])))).
 

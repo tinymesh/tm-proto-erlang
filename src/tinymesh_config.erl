@@ -49,7 +49,11 @@ pack(Config) ->
 
 -spec pack(Config :: [cfgval(),...], Acc :: [cfgval(),...]) -> iolist().
 pack([], Acc)             -> lists:reverse(Acc);
-pack([Cur | Config], Acc) -> pack(Config, [pack_val(Cur) | Acc]).
+pack([Cur | Config], Acc) ->
+	case pack_val(Cur) of
+		[]     -> pack(Config, Acc);
+		Packed -> pack(Config, [Packed | Acc])
+	end.
 
 
 -spec pack_val(cfgval()) -> cfglist().

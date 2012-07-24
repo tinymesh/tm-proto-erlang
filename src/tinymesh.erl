@@ -110,7 +110,7 @@ unserialize_payload(_) ->
 		                             16#79, BinV,  16#00, 16#0, 16#00, 16#00, 16#0, 16#2,
 		                             16#00, 16#01, 16#22>>),
 		[Voltage] = [ A || {voltage, A} <- Resp],
-		?_assert(Voltage == list_to_float(lists:flatten(io_lib:format("~.2f", [BinV])))).
+		?assert(Voltage == list_to_float(lists:flatten(io_lib:format("~.2f", [BinV * 0.03])))).
 
 	unserialize_payload_unknown_test() ->
 		[{error, {unknown_payload_type, _}}] = unserialize(<<20, 1:32, 2:32, 19,

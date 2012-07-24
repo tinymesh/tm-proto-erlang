@@ -1,7 +1,7 @@
 -module(tinymesh).
 
--export([unserialize/1]).
-
+-export([unserialize/1, serialize/1]).
+-compile([export_all]).
 -type touplet() :: {Key :: atom(), Value :: any()}.
 -type map()     :: [touplet(), ...].
 
@@ -83,6 +83,78 @@ unserialize_payload(<<2:8/unsigned-integer,            %% Constant for event msg
 unserialize_payload(_) ->
 	erlang:error(unknown_payload_type).
 
+
+
+-spec serialize(Payload :: map()) -> binary().
+serialize(Payload) ->
+	Type        = keyorerror(type,    Payload, missing_msg_type),
+	Destination = keyorerror(node_id, Payload, missing_msg_destination),
+	serialize(Destination, Type, Payload).
+
+-spec serialize(Dest :: non_neg_integer(), Type :: atom(), Msg :: map()) -> binary().
+serialize(Destination, command, Payload) ->
+	MsgNumber = keyorerror(packet_number, Payload, missing_packet_number),
+	Command   = keyorerror(command, Payload, missing_msg_command),
+	serialize(Destination, command, MsgNumber, Command, Payload);
+
+serialize(Destination, serial_out, Payload) ->
+	serialize(Destination, serial, Payload);
+
+serialize(Destination, serial, Payload) ->
+	[MsgNumber] = [V || {packet_number, V} <- Payload],
+	[Serial]    = [base64:decode(V) || {serial, V} <- Payload],
+	Checksum    = 6 + byte_size(Serial),
+	<<Checksum:8, Destination:32/little, MsgNumber:8, Serial/binary>>.
+
+-spec serialize(Dest :: non_neg_integer(), Type :: atom(), Command :: atom(),
+                MsgNumber :: non_neg_integer(), Payload :: map()) -> binary().
+serialize(Destination, command, MsgNumber, set_output, _) ->
+	error(set_output_not_implemente),
+	<<10, Destination:32/little, MsgNumber:8, 3, 1, 0, 0>>;
+
+serialize(Destination, command, MsgNumber, set_pwm, _) ->
+	error(set_pwm_not_implemented),
+	<<10, Destination:32/little, MsgNumber:8, 3, 2, 0, 0>>;
+
+serialize(Destination, command, MsgNumber, set_config, Payload) ->
+	Config  = iolist_to_binary(lists:flatten(tinymesh_config:pack(Payload))),
+	<<16#28, Destination:32/little, MsgNumber:8, 3, 3, Config/binary, 0:(32-byte_size(Config))/integer-unit:8>>;
+
+serialize(Destination, command, MsgNumber, get_status, _) ->
+	<<10, Destination:32/little, MsgNumber:8, 3, 17, 0, 0>>;
+
+serialize(Destination, command, MsgNumber, get_config, _) ->
+	<<10, Destination:32/little, MsgNumber:8, 3, 19, 0, 0>>;
+
+serialize(Destination, command, MsgNumber, _, _) ->
+	<<>>.
+
+%serialize(DestinationNode, PacketNumber, command, set_config, Payload) ->
+%	%% the node_id received is a quickfix, Colonel will send node_id when it
+%	%% actually is the node key in database. This is due to change and will be
+%	%% removed in the future.
+%	case list_to_binary([serialize_val(A, B) || {A, B}
+%			<- Payload, A =/= node_id]) of
+%		BinPayload when byte_size(BinPayload) =/= 0 ->
+%			%% Do not include message head when padding
+%			Padding = (32 - byte_size(BinPayload)) * 8,
+%			<<16#28,
+%			  DestinationNode:32/little,
+%			  PacketNumber:8,
+%			  3,
+%			  3,
+%			  BinPayload/binary,
+%			  0:Padding>>;
+%		_ -> <<"">>
+%	end.
+
+-spec keyorerror(Key :: atom(), List :: [{atom(), any()}], Error :: atom()) -> any().
+keyorerror(Key, List, Error) ->
+	case lists:keyfind(Key, 1, List) of
+		{_, Val} -> Val;
+		_      -> error(Error)
+	end.
+
 -ifdef(TEST).
 	-include_lib("eunit/include/eunit.hrl").
 
@@ -117,4 +189,34 @@ unserialize_payload(_) ->
 		                                                     1,  1,    1:16, 0:16,
 		                                                     99, "abc">>).
 
+	serialize_serial_test() ->
+		Payload = [{serial, base64:encode("abcd")}, {packet_number, 255}],
+		?assert(<<10, 1:32/little, 255, "abcd">> == serialize(1, serial, [
+			{serial, base64:encode("abcd")}, {packet_number, 255}])).
+
+	serialize_get_status_test() ->
+		?assert(<<10, 1:32/little, 254, 3, 17, 0, 0>> == serialize(1, command, 254, get_status, [])).
+
+	serialize_get_config_test() ->
+		?assert(<<10, 1:32/little, 253, 3, 19, 0, 0>> == serialize(1, command, 253, get_config, [])).
+
+	serialize_set_output_test() ->
+		e.
+
+	serialize_set_pwm_test() ->
+		e.
+
+	serialize_set_config_test() ->
+		A = serialize(1, command, 199, set_config,[{max_jump_count, 2}]),
+		?assert(<<16#28, 1:32/little, 199, 3, 3, 10, 2, 0:30/unit:8>> == A).
+
+	serialize_test() ->
+		Payload  = [{type, serial}, {node_id, 16#010101}, {packet_number, 100},
+		           {serial, base64:encode("abcd")}],
+		Payload2 = [{type, command}, {node_id, 16#010101}, {packet_number, 101},
+		            {command, get_status}],
+		serialize(Payload),
+		serialize(Payload2).
+		% Try serializing nothing
+		%%serialize([]).
 -endif.

@@ -40,8 +40,26 @@
 
 
 -spec unpack(Data :: binary()) -> (Config :: [cfgval(), ...]).
-unpack(<<Data/binary>>) ->
-	unserialize_val(Data, Acc, Offset).
+unpack(Data) ->
+	unpack(Data,[], 0).
+
+-spec unpack(Data :: binary(), Acc :: [cfgval()], Offset :: non_neg_integer()) -> [cfgval()].
+unpack(<<>>, Acc,  _) ->
+	lists:reverse(Acc);
+
+unpack(Data, Acc, Offset) ->
+	case [{A, B, C} || {A, B, C} <-
+	         ?CONFIGPARAMS, B =< Offset, Offset + 1 - C =< B ] of
+		[{Key, _, Len}] = A->
+			<<Val:Len/little-binary, Tail/binary>> = Data,
+			unpack(Tail, [{Key, Val}|Acc], Offset + Len);
+		[] ->
+			%% If this happends, config is invalid and the rest of the config
+			%% should be disregarded ACK-INVALID
+			<<_:8, Tail/binary>> = Data,
+			unpack(Tail, Acc, Offset + 1)
+	end.
+
 
 -spec pack(Config :: [cfgval()]) -> iolist().
 pack(Config) ->
@@ -78,10 +96,6 @@ pack_val({Key, Value}) when is_binary(Value) ->
 	_ ->
 		[]
 	end.
-
--spec config_lookup(non_neg_integer()) -> List :: [cfgdef()].
-config_lookup(Pos) ->
-	[{A, B, C} || {A, B, C} <- ?CONFIGPARAMS, B =< Pos, Pos + 1 - C =< B ].
 
 -ifdef(TEST).
 	-include_lib("eunit/include/eunit.hrl").

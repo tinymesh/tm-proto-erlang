@@ -49,11 +49,6 @@ unpack(<<>>, Acc,  _) ->
 unpack(Data, Acc, Offset) ->
 	case [{A, B, C, D} || {A, B, C, D} <-
 	         ?CONFIGPARAMS, B =< Offset, Offset + 1 - C =< B ] of
-		[] ->
-			%% If this happends, config is invalid and the rest of the config
-			%% should be disregarded ACK-INVALID
-			<<_:8, Tail/binary>> = Data,
-			unpack(Tail, Acc, Offset + 1);
 		[{Key, _, Len, Type}] ->
 			case Type of
 				int ->
@@ -73,7 +68,12 @@ unpack(Data, Acc, Offset) ->
 				binary ->
 					<<Val:Len/binary-unit:8, Tail/binary>> = Data
 			end,
-			unpack(Tail, [{Key, Val}|Acc], Offset + Len)
+			unpack(Tail, [{Key, Val}|Acc], Offset + Len);
+		[] ->
+			%% If this happends, config is invalid and the rest of the config
+			%% should be disregarded ACK-INVALID
+			<<_:8, Tail/binary>> = Data,
+			unpack(Tail, Acc, Offset + 1)
 	end.
 
 -spec pack(Config :: [cfgval()]) -> iolist().
@@ -118,11 +118,29 @@ pack_val({Key, Value}) when is_binary(Value) ->
 	unpack_test() ->
 		%% Test unpacking a single integer value
 		?assert([{rf_channel, 1}] == unpack(<<1:8>>)),
-		%% Test float value, as we can't know where the separator should be placed
-		%% we just print the numerical value and let somebody else worry.
+		%% Test float value, it defaults to 2-digit precision
 		?assert([{hw_version, <<"1.23">>}] == unpack(list_to_binary([1,2,3]), [], 75)),
 		%% Test string value
-		?assert([{model, <<"model123">>}] == unpack(<<"model123">>, [], 60)).
+		?assert([{model, <<"model123">>}] == unpack(<<"model123">>, [], 60)),
+		%% Validate 1 whole config
+		Config = [ 16#01, 16#00, 16#00, 16#00, 16#02, 16#01, 16#00, 16#00, 16#83,
+			16#01, 16#01, 16#00, 16#06, 16#00, 16#06, 16#02, 16#21, 16#07, 16#05,
+			16#05, 16#00, 16#be, 16#c1, 16#04, 16#ff, 16#04, 16#14, 16#1e, 16#05,
+			16#0a, 16#14, 16#02, 16#00, 16#01, 16#01, 16#01, 16#01, 16#01, 16#01,
+			16#01, 16#01, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00,
+			16#0a, 16#07, 16#ff, 16#00, 16#00, 16#0a, 16#07, 16#ff, 16#00, 16#00,
+			16#0a, 16#19, 16#00, 16#02, 16#01, 16#00, 16#00, 16#01, 16#00, 16#00,
+			16#00, 16#05, 16#01, 16#00, 16#00, 16#00, 16#00, 16#00, 16#52, 16#43,
+			16#31, 16#31, 16#37, 16#30, 16#2d, 16#54, 16#4d, 16#2c, 16#32, 16#2e,
+			16#30, 16#30, 16#2c, 16#31, 16#2e, 16#33, 16#31, 16#ff, 16#ff, 16#02,
+			16#00, 16#01, 16#00, 16#00, 16#05, 16#00, 16#00, 16#00, 16#00, 16#01,
+			16#00, 16#00, 16#00, 16#00, 16#01, 16#00, 16#00, 16#00, 16#00, 16#00,
+			16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#52, 16#46
+		],
+		?assert(52 == length(unpack(list_to_binary(Config)))).
+
+
+
 
 	pack_val_test() ->
 		%% Test data-integrity loss

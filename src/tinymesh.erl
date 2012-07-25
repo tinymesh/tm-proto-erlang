@@ -73,17 +73,15 @@ unserialize_payload(<<2:8/unsigned-integer,            %% Constant for event msg
 		{locator,     LocatorID},
 		{temp,        Temperatur - 128},
 		{voltage,     list_to_float(lists:flatten(io_lib:format("~.2f", [Voltage * 0.03])))},
-		{digital_io_0, DigitalIO_0}, {digital_io_1, DigitalIO_1},
-		{digital_io_2, DigitalIO_2}, {digital_io_3, DigitalIO_3},
-		{digital_io_4, DigitalIO_4}, {digital_io_5, DigitalIO_5},
-		{digital_io_6, DigitalIO_6}, {digital_io_7, DigitalIO_7},
+		{digital_io_0, 1 bxor DigitalIO_0}, {digital_io_1, 1 bxor DigitalIO_1},
+		{digital_io_2, 1 bxor DigitalIO_2}, {digital_io_3, 1 bxor DigitalIO_3},
+		{digital_io_4, 1 bxor DigitalIO_4}, {digital_io_5, 1 bxor DigitalIO_5},
+		{digital_io_6, 1 bxor DigitalIO_6}, {digital_io_7, 1 bxor DigitalIO_7},
 		{analog_io_0, AnalogIO_0},   {analog_io_1, AnalogIO_1},
 		{hw_version,  HWVersion},    {fw_version,  FWVersion}];
 
 unserialize_payload(_) ->
 	erlang:error(unknown_payload_type).
-
-
 
 -spec serialize(Payload :: map()) -> binary().
 serialize(Payload) ->

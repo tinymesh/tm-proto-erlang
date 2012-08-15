@@ -107,11 +107,11 @@ serialize(Destination, serial, Payload) ->
 -spec serialize(Dest :: non_neg_integer(), Type :: atom(), Command :: atom(),
                 MsgNumber :: non_neg_integer(), Payload :: map()) -> binary().
 serialize(Destination, command, MsgNumber, set_output, _) ->
-	error(set_output_not_implemente),
+	erlang:error(set_output_not_implemente),
 	<<10, Destination:32/little, MsgNumber:8, 3, 1, 0, 0>>;
 
 serialize(Destination, command, MsgNumber, set_pwm, _) ->
-	error(set_pwm_not_implemented),
+	erlang:error(set_pwm_not_implemented),
 	<<10, Destination:32/little, MsgNumber:8, 3, 2, 0, 0>>;
 
 serialize(Destination, command, MsgNumber, set_config, Payload) ->
@@ -125,14 +125,14 @@ serialize(Destination, command, MsgNumber, get_config, _) ->
 	<<10, Destination:32/little, MsgNumber:8, 3, 19, 0, 0>>;
 
 serialize(_Destination, command, _MsgNumber, _, _) ->
-	error(unknown_command_encountered),
+	erlang:error(unknown_command_encountered),
 	<<>>.
 
 -spec keyorerror(Key :: atom(), List :: [{atom(), any()}], Error :: atom()) -> any().
 keyorerror(Key, List, Error) ->
 	case lists:keyfind(Key, 1, List) of
 		{_, Val} -> Val;
-		_      -> error(Error)
+		_        -> erlang:error(Error)
 	end.
 
 -ifdef(TEST).

@@ -102,7 +102,11 @@ serialize(Destination, serial, Payload) ->
 	[MsgNumber] = [V || {packet_number, V} <- Payload],
 	[Serial]    = [base64:decode(V) || {serial, V} <- Payload],
 	Checksum    = 6 + byte_size(Serial),
-	<<Checksum:8, Destination:32/little, MsgNumber:8, Serial/binary>>.
+	<<Checksum:8, Destination:32/little, MsgNumber:8, Serial/binary>>;
+
+serialize(_Destination, _Type, _MsgNumber) when not is_atom(_Type) ->
+	erlang:error(wrong_datatype_for_message_type),
+	<<>>.
 
 -spec serialize(Dest :: non_neg_integer(), Type :: atom(), Command :: atom(),
                 MsgNumber :: non_neg_integer(), Payload :: map()) -> binary().
@@ -197,6 +201,27 @@ keyorerror(Key, List, Error) ->
 
 	serialize_set_pwm_test() ->
 		e.
+
+	serialize_unknown_command_test() ->
+		?assertError(unknown_command_encountered, serialize([
+			{node_id, 123}, {type, command}, {command, unknown_command_atom},
+			{packet_number, 123}])).
+
+	serialize_wrong_datatype_for_msgtype_test() ->
+		?assertError(wrong_datatype_for_message_type, serialize([
+			{node_id, 123}, {type, "command"}, {command, unknown_command_atom},
+			{packet_number, 123}])).
+
+	serialize_wrong_datatype_for_commandtype_test() ->
+		?assertError(wrong_datatype_for_command, serialize([
+			{node_id, 123}, {type, command}, {command, "get_config"},
+			{packet_number, 123}])).
+
+	serialize_no_msg_type_test() ->
+		?assertError(missing_msg_type, serialize([{a, b}, {c, d}, {e, f}])).
+
+	serialize_no_destination_test() ->
+		?assertError(missing_msg_destination, serialize([{type, b}, {c, d}, {e, f}])).
 
 	serialize_set_config_test() ->
 		A = serialize(1, command, 199, set_config,[{max_jump_count, 2}]),

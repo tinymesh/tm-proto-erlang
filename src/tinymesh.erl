@@ -134,6 +134,9 @@ serialize(_Destination, command, _MsgNumber, _, _) ->
 	erlang:error(wrong_datatype_for_command).
 
 -spec handle_string(Key :: atom(), Val :: string()) -> EncodedVal :: any().
+handle_string(_Key, Val) when not is_list(Val) ->
+	Val;
+
 handle_string(Key, Val) when Key == command orelse Key == type ->
 	list_to_atom(lists:flatten(Val));
 
@@ -231,4 +234,23 @@ keyorerror(Key, List, Error) ->
 		serialize(Payload2).
 		% Try serializing nothing
 		%%serialize([]).
+
+	handle_string_test() ->
+		lists:foreach(
+			fun
+			    ({Key, Val, exception, Expected}) ->
+					?assertException(error, Expected, handle_string(Key, Val));
+				%%({Key, Val, error, Expected}) ->
+				%%	?assertError(Expected, handle_string(Key, Val));
+			    ({Key, Val, Expected}) ->
+					?assertEqual(handle_string(Key, Val), Expected)
+			end, [
+				{command, "valid", valid},
+				{command, "^weirdCommand", '^weirdCommand'},
+				{node_id, "123", 123},
+				{node_id, "}^invalidNode", exception, badarg},
+				{digital_io, "123", 123},
+				{latency, 123, 123},
+				{fw_version, "1.31", exception, badarg}
+			]).
 -endif.

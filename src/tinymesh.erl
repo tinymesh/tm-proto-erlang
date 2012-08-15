@@ -105,8 +105,7 @@ serialize(Destination, serial, Payload) ->
 	<<Checksum:8, Destination:32/little, MsgNumber:8, Serial/binary>>;
 
 serialize(_Destination, _Type, _MsgNumber) when not is_atom(_Type) ->
-	erlang:error(wrong_datatype_for_message_type),
-	<<>>.
+	erlang:error(wrong_datatype_for_message_type).
 
 -spec serialize(Dest :: non_neg_integer(), Type :: atom(), Command :: atom(),
                 MsgNumber :: non_neg_integer(), Payload :: map()) -> binary().
@@ -129,14 +128,10 @@ serialize(Destination, command, MsgNumber, get_config, _) ->
 	<<10, Destination:32/little, MsgNumber:8, 3, 19, 0, 0>>;
 
 serialize(_Destination, command, _MsgNumber, _Command, _) when is_atom(_Command) ->
-	erlang:error(unknown_command_encountered),
-	<<>>;
+	erlang:error(unknown_command_encountered);
+
 serialize(_Destination, command, _MsgNumber, _, _) ->
-	erlang:error(wrong_datatype_for_command),
-	<<>>;
-serialize(_Destination, _Type, _MsgNumber, _, _) when is_atom(_Type) ->
-	erlang:error(unknown_message_type),
-	<<>>.
+	erlang:error(wrong_datatype_for_command).
 
 -spec handle_string(Key :: atom(), Val :: string()) -> EncodedVal :: any().
 handle_string(Key, Val) when Key == command orelse Key == type ->
@@ -203,19 +198,19 @@ keyorerror(Key, List, Error) ->
 		e.
 
 	serialize_unknown_command_test() ->
-		?assertError(unknown_command_encountered, serialize([
-			{node_id, 123}, {type, command}, {command, unknown_command_atom},
-			{packet_number, 123}])).
+		Payload = [ {node_id, 123}, {type, command}, {command, unknown_command_atom},
+		            {packet_number, 123}],
+		?assertError(unknown_command_encountered, serialize(Payload)).
 
 	serialize_wrong_datatype_for_msgtype_test() ->
-		?assertError(wrong_datatype_for_message_type, serialize([
-			{node_id, 123}, {type, "command"}, {command, unknown_command_atom},
-			{packet_number, 123}])).
+		Payload = [ {node_id, 123}, {type, "command"}, {command, unknown_command_atom},
+		            {packet_number, 123}],
+		?assertError(wrong_datatype_for_message_type, serialize(Payload)).
 
 	serialize_wrong_datatype_for_commandtype_test() ->
-		?assertError(wrong_datatype_for_command, serialize([
-			{node_id, 123}, {type, command}, {command, "get_config"},
-			{packet_number, 123}])).
+		Payload = [ {node_id, 123}, {type, command}, {command, "get_config"},
+		            {packet_number, 123}],
+		?assertError(wrong_datatype_for_command, serialize(Payload)).
 
 	serialize_no_msg_type_test() ->
 		?assertError(missing_msg_type, serialize([{a, b}, {c, d}, {e, f}])).

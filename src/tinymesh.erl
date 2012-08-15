@@ -188,6 +188,10 @@ keyorerror(Key, List, Error) ->
 		?assert(<<10, 1:32/little, 255, "abcd">> == serialize(1, serial, [
 			{serial, base64:encode("abcd")}, {packet_number, 255}])).
 
+	serialize_serial_out_link_test() ->
+		?assert(<<10, 1:32/little, 255, "abcd">> == serialize(1, serial_out, [
+			{serial, base64:encode("abcd")}, {packet_number, 255}])).
+
 	serialize_get_status_test() ->
 		?assert(<<10, 1:32/little, 254, 3, 17, 0, 0>> == serialize(1, command, 254, get_status, [])).
 
@@ -217,6 +221,11 @@ keyorerror(Key, List, Error) ->
 
 	serialize_no_msg_type_test() ->
 		?assertError(missing_msg_type, serialize([{a, b}, {c, d}, {e, f}])).
+
+	serialize_invalid_type_test() ->
+		Payload = [{type, "select"}, {node_id, 16#010101}, {packet_number, 100},
+		           {serial, base64:encode("abcd")}],
+		?assertError(wrong_datatype_for_message_type, serialize(Payload)).
 
 	serialize_no_destination_test() ->
 		?assertError(missing_msg_destination, serialize([{type, b}, {c, d}, {e, f}])).

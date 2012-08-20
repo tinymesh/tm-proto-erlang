@@ -172,7 +172,10 @@ keyorerror(Key, List, Error) ->
 		[SerialData] = [ A || {serial, A} <- Resp],
 		?assert(base64:decode(SerialData) == Serial).
 
-	unserialize_payload_serial_no_constant_test() ->
+	unserialize_payload_serial_checksumed_garbage_test() ->
+		{error, {invalid_data, _}} = unserialize(<<12, 1:32, 2:32, 19, 1, 1:8>>).
+
+	unserialize_payload_serial_mising_serial_constant_test() ->
 		{error, {unknown_payload_type, _}} = unserialize(<<20, 1:32, 2:32, 19,
 		                                                     1,  1,    1:16, 0:16,
 		                                                     16, "abc">>).

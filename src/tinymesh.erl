@@ -39,7 +39,7 @@ unserialize_payload(<<16:8/unsigned-integer, 0:8, Payload/binary>>) ->
 
 unserialize_payload(<<2:8/unsigned-integer,            %% Constant for event msg
                       Detail:8/unsigned-integer,       %% The message detail
-                      MessageData:16/binary-unit:1,    %% User selected data
+                      MessageData:16/integer-unit:1,   %% User selected data
                       LocatorID:32/unsigned-integer,   %% Locator ID, used for auth
                       Temperatur:8/unsigned-integer,   %% Module temp, always -128
                       Voltage:8/unsigned-integer,      %% Voltage monitor (V*0.03)
@@ -55,6 +55,10 @@ unserialize_payload(<<2:8/unsigned-integer,            %% Constant for event msg
                       AnalogIO_1:16/unsigned-integer,  %% Analog IO 1
                       HWVersion:16/binary-unit:1,   %% Hardware revisions
                       FWVersion:16/binary-unit:1>>) ->
+	<<HWVerMajor:8/unsigned-integer, HWVerMin:8/unsigned-integer>> = HWVersion,
+	HWVersion2 = HWVerMajor + (HWVerMin / 100),
+	<<FWVerMajor:8/unsigned-integer, FWVerMin:8/unsigned-integer>> = FWVersion,
+	FWVersion2 = FWVerMajor + (FWVerMin / 100),
 	[	{type, event},
 		{detail, Detail},
 		{detail_e, case Detail of
@@ -77,8 +81,8 @@ unserialize_payload(<<2:8/unsigned-integer,            %% Constant for event msg
 		{digital_io_2, 1 bxor DigitalIO_2}, {digital_io_3, 1 bxor DigitalIO_3},
 		{digital_io_4, 1 bxor DigitalIO_4}, {digital_io_5, 1 bxor DigitalIO_5},
 		{digital_io_6, 1 bxor DigitalIO_6}, {digital_io_7, 1 bxor DigitalIO_7},
-		{analog_io_0, AnalogIO_0},   {analog_io_1, AnalogIO_1},
-		{hw_version,  HWVersion},    {fw_version,  FWVersion}];
+		{analog_io_0, AnalogIO_0},    {analog_io_1, AnalogIO_1},
+		{hw_version,  HWVersion2},    {fw_version,  FWVersion2}];
 
 unserialize_payload(_) ->
 	erlang:error(unknown_payload_type).

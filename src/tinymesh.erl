@@ -17,15 +17,17 @@ unserialize(<<_Checksum:8/unsigned-integer,          % Message checksum
               HopCounter:8/unsigned-integer,  % Actual hop count to gateway
               Counter:16/unsigned-integer,    % Unique message number
               Latency:16/unsigned-integer,    % Time since msg creation (10ms)
-              Payload/binary>>) ->
+              Payload/binary>> = Binary) ->
 	try
-		{ok, lists:flatten([[{system_id,      SystemID},
-		                {node_id,        UniqueID},
-		                {rssi,           RSSI},
-		                {jump_level,     NetworkLevel},
-		                {jump_count,     HopCounter},
-		                {msg_id,         Counter},
-		                {packet_latency, Latency}] | unserialize_payload(Payload)])}
+		{ok, lists:flatten(
+			[[ {raw,            base64:encode(Binary)}
+			 , {system_id,      SystemID}
+			 , {node_id,        UniqueID}
+			 , {rssi,           RSSI}
+			 , {jump_level,     NetworkLevel}
+			 , {jump_count,     HopCounter}
+			 , {msg_id,         Counter}
+			 , {packet_latency, Latency}] | unserialize_payload(Payload)])}
 	catch
 			error: unknown_payload_type -> {error, {unknown_payload_type, Payload}}
 	end;

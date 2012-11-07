@@ -93,13 +93,10 @@ pack([Cur | Config], Acc) ->
 pack_val({_, Value}) when is_integer(Value), Value < 0 ->
 	[];
 
-pack_val({Key, Value}) when not is_binary(Value) ->
-	try
-		pack_val({Key, binary:encode_unsigned(Value)})
-	catch
-		_: _ -> pack_val({Key, list_to_binary(Value)})
-	end;
-
+pack_val({Key, Value}) when is_list(Value) ->
+	pack_val({Key, list_to_binary(Value)});
+pack_val({Key, Value}) when is_integer(Value) ->
+	pack_val({Key, binary:encode_unsigned(Value)});
 pack_val({Key, Value}) when is_binary(Value) ->
 	ValueSize = byte_size(Value),
 	case lists:keyfind(Key, 1, ?CONFIGPARAMS) of

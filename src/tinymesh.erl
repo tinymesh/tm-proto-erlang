@@ -57,7 +57,7 @@ ppayload(<<16:8, 0:8, Buf/binary>>) ->
 	{ok, <<>>, [ {<<"type">>, <<"serial">>}
 	           , {<<"serial">>, Buf} ]};
 ppayload(<<2:8, Buf/binary>>) ->
-	ppayload(Buf, {1, []});
+	ppayload(Buf, {1, [{<<"type">>, <<"event">>}]});
 ppayload(_) ->
 	{error, invalid_data}.
 

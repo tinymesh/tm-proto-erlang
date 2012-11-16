@@ -63,7 +63,10 @@ ppayload(_) ->
 
 ppayload(<<>>, {_, Acc}) -> {ok, <<>>, lists:reverse(Acc)};
 ppayload(<<Detail:8, Tail/binary>>, {1 = P, Acc}) ->
-	ppayload(Tail, {P+1, [{<<"detail">>, event_detail(Detail)}|Acc]});
+	case event_detail(Detail) of
+		get_config -> {ok, <<>>, lists:reverse(payload_config(Tail, [{<<"detail">>, get_config}|Acc]))};
+		EvDetail -> ppayload(Tail, {P+1, [{<<"detail">>, EvDetail}|Acc]})
+	end;
 ppayload(<<Data:16/integer-unit:1, Tail/binary>>, {2 = P, Acc}) ->
 	ppayload(Tail, {P+2, [{<<"msg_data">>, Data}|Acc]});
 ppayload(<<Locator:32/unsigned-integer, Tail/binary>>, {4 = P, Acc}) ->
@@ -91,6 +94,9 @@ ppayload(<<Major:8/integer, Min:8/integer, Tail/binary>>, {15 = P, Acc}) ->
 	ppayload(Tail, {P+2, [{<<"hardware">>, Major + (Min / 100)}|Acc]});
 ppayload(<<Major:8/integer, Min:8/integer, Tail/binary>>, {17 = P, Acc}) ->
 	ppayload(Tail, {P+2, [{<<"firmware">>, Major + (Min / 100)}|Acc]}).
+
+payload_config(Config, Acc) ->
+	[{<<"config">>, tinymesh_config:unpack(Config)}|Acc].
 
 -spec event_detail(1..16) -> atom().
 event_detail(16#01) -> io_change;

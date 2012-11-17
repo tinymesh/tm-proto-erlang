@@ -181,6 +181,7 @@ c_set_output2({<<"output">>, Payload}, Acc) ->
 	{A1, A2} = lists:foldl(fun c_set_output3/2, {0, 0}, Payload),
 	{ok, fun c_serialize/2, Acc#command{payload = <<A1/integer, A2/integer>>}}.
 
+c_set_output3({<<N:8/integer>>, X}, {A1, A2}) ->c_set_output3({N-48, X}, {A1, A2});
 c_set_output3({N, true}, {A1, A2}) -> {A1 + erlang:trunc(math:pow(2, N)), A2};
 c_set_output3({N, false}, {A1, A2}) -> {A1, erlang:trunc(A2 + math:pow(2, N))};
 c_set_output3({_, none}, {A1, A2}) -> {A1, A2}.
@@ -352,6 +353,15 @@ keymember(K, L, Fun, E, Acc) when is_list(L) ->
 			]}
 		]),
 		?assertEqual({ok,<<16#28, 123, 0, 0, 0, 130, 3, 3, 10, 2, 0:30/unit:8>>}, A).
+
+	serialize_set_output_binary_test() ->
+		Base = [
+		  {<<"unique_id">>,     6}
+		, {<<"type">>,          <<"command">>}
+		, {<<"command">>,       <<"set_output">>}
+		, {<<"packet_number">>, 0}],
+		?assertEqual({ok,<<10,6,0,0,0,0,3,1,192,0>>}
+		, tinymesh:serialize([{<<"output">>,[{<<"6">>,true},{<<"7">>,true}]}|Base])).
 
 	serialize_test() ->
 		Payload  = [

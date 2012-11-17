@@ -89,14 +89,11 @@ pack([Cur | Config], Acc) ->
 	end.
 
 
--spec pack_val(cfgval()) -> iolist().
-pack_val({_, Value}) when is_integer(Value), Value < 0 ->
-	[];
-
-pack_val({Key, Value}) when is_list(Value) ->
-	pack_val({Key, list_to_binary(Value)});
-pack_val({Key, Value}) when is_integer(Value) ->
-	pack_val({Key, binary:encode_unsigned(Value)});
+-spec pack_val(cfgval() | binary()) -> iolist().
+pack_val({Key, Value}) when is_binary(Key) -> pack_val({binary_to_existing_atom(Key, utf8), Value});
+pack_val({_, Value}) when is_integer(Value), Value < 0 -> [];
+pack_val({Key, Value}) when is_list(Value) -> pack_val({Key, list_to_binary(Value)});
+pack_val({Key, Value}) when is_integer(Value) -> pack_val({Key, binary:encode_unsigned(Value)});
 pack_val({Key, Value}) when is_binary(Value) ->
 	ValueSize = byte_size(Value),
 	case lists:keyfind(Key, 1, ?CONFIGPARAMS) of

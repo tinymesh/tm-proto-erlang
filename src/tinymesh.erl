@@ -1,6 +1,6 @@
 -module(tinymesh).
 
--export([unserialize/1, serialize/1]).
+-export([unserialize/1, serialize/1, handshake/1, ack/0]).
 
 -type buf()     :: binary().
 -type stream()  :: binary().
@@ -13,6 +13,19 @@
 	, number  = 0             :: non_neg_integer()
 	, payload = <<0,0>>       :: binary()
 }).
+
+-spec handshake(non_neg_integer()) -> binary().
+handshake(PacketNumber) ->
+	tinymesh:serialize([
+		  {<<"unique_id">>,     0}
+		, {<<"type">>,          <<"command">>}
+		, {<<"command">>,       <<"get_nid">>}
+		, {<<"packet_number">>, PacketNumber}
+	]).
+
+-spec ack() -> binary().
+ack() ->
+	{ok, <<6>>}.
 
 -spec unserialize(stream() | buf()) -> {ok, [parsed()] | parsed()} | {error, term()}.
 unserialize(<<Chksum:8, _/binary>> = Buf) when byte_size(Buf) == Chksum ->
@@ -113,7 +126,7 @@ event_detail(16#0D) -> shared_channel;
 event_detail(16#0E) -> zacima;
 event_detail(16#10) -> ack;
 event_detail(16#11) -> not_accetable;
-event_detail(16#12) -> nid_report;
+event_detail(16#12) -> get_caddr;
 event_detail(16#21) -> get_config.
 
 -spec serialize(parsed()) -> buf().

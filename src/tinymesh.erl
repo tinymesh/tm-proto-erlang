@@ -103,10 +103,12 @@ ppayload(<<AIn0:16/unsigned-integer, Tail/binary>>, {11 = P, Acc}) ->
 	ppayload(Tail, {P+2, [{<<"analog_io_0">>, AIn0}|Acc]});
 ppayload(<<AIn1:16/unsigned-integer, Tail/binary>>, {13 = P, Acc}) ->
 	ppayload(Tail, {P+2, [{<<"analog_io_1">>, AIn1}|Acc]});
-ppayload(<<Major:8/integer, Min:8/integer, Tail/binary>>, {15 = P, Acc}) ->
-	ppayload(Tail, {P+2, [{<<"hardware">>, Major + (Min / 100)}|Acc]});
-ppayload(<<Major:8/integer, Min:8/integer, Tail/binary>>, {17 = P, Acc}) ->
-	ppayload(Tail, {P+2, [{<<"firmware">>, Major + (Min / 100)}|Acc]}).
+ppayload(<<Major:8/integer, Min1:4/integer, Min2:4/integer, Tail/binary>>, {15 = P, Acc}) ->
+	Min = (Min1 * 10 + Min2) / 100,
+	ppayload(Tail, {P+2, [{<<"hardware">>, Major + Min}|Acc]});
+ppayload(<<Major:8/integer, Min1:4/integer, Min2:4/integer, Tail/binary>>, {17 = P, Acc}) ->
+	Min = (Min1 * 10 + Min2) / 100,
+	ppayload(Tail, {P+2, [{<<"firmware">>, Major + Min}|Acc]}).
 
 payload_config(Config, Acc) ->
 	[{<<"config">>, tinymesh_config:unpack(Config)}|Acc].

@@ -89,16 +89,16 @@ ppayload(<<Temperatur:8/unsigned-integer, Tail/binary>>, {8 = P, Acc}) ->
 ppayload(<<Voltage:8/unsigned-integer, Tail/binary>>, {9 = P, Acc}) ->
 	Voltage2 = erlang:trunc((Voltage*0.03)*100)*0.01,
 	ppayload(Tail, {P+1, [{<<"voltage">>, Voltage2}|Acc]});
-ppayload(<<D0:1, D1:1, D2:1, D3:1, D4:1, D5:1, D6:1, D7:1, Tail/binary>>, {10 = P, Acc}) ->
+ppayload(<<D7:1, D6:1, D5:1, D4:1, D3:1, D2:1, D1:1, D0:1, Tail/binary>>, {10 = P, Acc}) ->
 	ppayload(Tail, {P+1,
-		[{<<"digital_io_0">>, D0}|
-		 [{<<"digital_io_1">>, D1}|
-		  [{<<"digital_io_2">>, D2}|
-		   [{<<"digital_io_3">>, D3}|
-		    [{<<"digital_io_4">>, D4}|
-		     [{<<"digital_io_5">>, D5}|
-		      [{<<"digital_io_6">>, D6}|
-		       [{<<"digital_io_7">>, D7}|Acc]]]]]]]]});
+		[{<<"digital_io_0">>, D0}
+		,{<<"digital_io_1">>, D1}
+		,{<<"digital_io_2">>, D2}
+		,{<<"digital_io_3">>, D3}
+		,{<<"digital_io_4">>, D4}
+		,{<<"digital_io_5">>, D5}
+		,{<<"digital_io_6">>, D6}
+		,{<<"digital_io_7">>, D7}|Acc]});
 ppayload(<<AIn0:16/unsigned-integer, Tail/binary>>, {11 = P, Acc}) ->
 	ppayload(Tail, {P+2, [{<<"analog_io_0">>, AIn0}|Acc]});
 ppayload(<<AIn1:16/unsigned-integer, Tail/binary>>, {13 = P, Acc}) ->

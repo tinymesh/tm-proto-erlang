@@ -50,7 +50,7 @@ proc(<<Checksum:8/unsigned-integer,         % Message checksum
 	      , {<<"rssi">>,           RSSI}
 	      , {<<"network_lvl">>,    NetworkLevel}
 	      , {<<"jump_count">>,     HopCounter}
-	      , {<<"msg_id">>,         Counter}
+	      , {<<"packet_number">>,  Counter}
 	      , {<<"latency">>,        Latency}]);
 proc(_) ->
 	{error, invalid_data}.

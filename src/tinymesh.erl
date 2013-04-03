@@ -214,11 +214,11 @@ c_set_config2({<<"config">>, Payload}, #command{} = Acc) ->
 	Config  = iolist_to_binary(lists:flatten(tinymesh_config:pack(Payload))),
 	{ok, fun c_serialize/2, Acc#command{payload = <<Config/binary, 0:(32-byte_size(Config))/integer-unit:8>>}}.
 
-c_serialize(_, #command{target = D, number = N, type = T, command = 0, payload = P} = Acc) ->
+c_serialize(_, #command{target = D, number = N, type = T, command = 0, payload = P}) ->
 	Out = <<D:32/integer-little, N:8/integer, T:8/integer, P/binary>>,
 	Size = byte_size(Out) + 1,
 	{ok, <<Size/integer, Out/binary>>};
-c_serialize(_, #command{target = D, number = N, type = T, command = C, payload = P} = Acc) ->
+c_serialize(_, #command{target = D, number = N, type = T, command = C, payload = P}) ->
 	Out = <<D:32/integer-little, N:8/integer, T:8/integer, C:8/integer, P/binary>>,
 	Size = byte_size(Out) + 1,
 	{ok, <<Size/integer, Out/binary>>}.

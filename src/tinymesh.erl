@@ -114,22 +114,22 @@ payload_config(Config, Acc) ->
 	[{<<"config">>, tinymesh_config:unpack(Config)}|Acc].
 
 -spec event_detail(1..16) -> atom().
-event_detail(16#01) -> io_change;
-event_detail(16#02) -> analog_io_0_change;
-event_detail(16#03) -> analog_io_1_change;
-event_detail(16#04) -> temp_warning;
-event_detail(16#05) -> voltage_warning;
-event_detail(16#08) -> power_on;
-event_detail(16#09) -> ima;
-event_detail(16#0A) -> network_busy; %% co-existing with same system id
-event_detail(16#0B) -> network_inactiv;
-event_detail(16#0C) -> channel_jam; %% no cca
-event_detail(16#0D) -> shared_channel;
-event_detail(16#0E) -> zacima;
-event_detail(16#10) -> ack;
-event_detail(16#11) -> not_accetable;
-event_detail(16#12) -> get_caddr;
-event_detail(16#21) -> get_config.
+event_detail(16#01) -> <<"io_change">>;
+event_detail(16#02) -> <<"analog_io_0_change">>;
+event_detail(16#03) -> <<"analog_io_1_change">>;
+event_detail(16#04) -> <<"temp_warning">>;
+event_detail(16#05) -> <<"voltage_warning">>;
+event_detail(16#08) -> <<"power_on">>;
+event_detail(16#09) -> <<"ima">>;
+event_detail(16#0A) -> <<"network_busy">>; %% co-existing with same system id
+event_detail(16#0B) -> <<"network_inactiv">>;
+event_detail(16#0C) -> <<"channel_jam">>; %% no cca
+event_detail(16#0D) -> <<"shared_channel">>;
+event_detail(16#0E) -> <<"zacima">>;
+event_detail(16#10) -> <<"ack">>;
+event_detail(16#11) -> <<"not_accetable">>;
+event_detail(16#12) -> <<"get_caddr">>;
+event_detail(16#21) -> <<"get_config">>.
 
 -spec serialize(parsed()) -> buf().
 serialize(Payload) when is_list(Payload) ->

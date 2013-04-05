@@ -127,7 +127,7 @@ event_detail(16#0C) -> <<"channel_jam">>; %% no cca
 event_detail(16#0D) -> <<"shared_channel">>;
 event_detail(16#0E) -> <<"zacima">>;
 event_detail(16#10) -> <<"ack">>;
-event_detail(16#11) -> <<"not_accetable">>;
+event_detail(16#11) -> <<"nack">>;
 event_detail(16#12) -> <<"get_caddr">>;
 event_detail(16#21) -> <<"get_config">>.
 

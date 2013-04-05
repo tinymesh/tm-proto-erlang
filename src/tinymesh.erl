@@ -128,7 +128,7 @@ event_detail(16#0D) -> <<"shared_channel">>;
 event_detail(16#0E) -> <<"zacima">>;
 event_detail(16#10) -> <<"ack">>;
 event_detail(16#11) -> <<"nack">>;
-event_detail(16#12) -> <<"get_caddr">>;
+event_detail(16#12) -> <<"get_cid">>;
 event_detail(16#21) -> <<"get_config">>.
 
 -spec serialize(parsed()) -> buf().

@@ -19,7 +19,7 @@ handshake(PacketNumber) ->
 	tinymesh:serialize([
 		  {<<"unique_id">>,     0}
 		, {<<"type">>,          <<"command">>}
-		, {<<"command">>,       <<"get_nid">>}
+		, {<<"command">>,       <<"get_cid">>}
 		, {<<"packet_number">>, PacketNumber}
 	]).
 
@@ -173,7 +173,7 @@ s_command(Payload, #command{} = Acc) ->
 			{ok, fun c_set_pwm/2, Acc#command{type = 3, command = 2}};
 		{<<"command">>, <<"set_config">>} ->
 			{ok, fun c_set_config/2, Acc#command{type = 3, command = 3}};
-		{<<"command">>, <<"get_nid">>} ->
+		{<<"command">>, <<"get_cid">>} ->
 			{ok, fun c_serialize/2, Acc#command{type = 3, command = 16}};
 		{<<"command">>, <<"get_status">>} ->
 			{ok, fun c_serialize/2, Acc#command{type = 3, command = 17}};
@@ -283,11 +283,11 @@ keymember(K, L, Fun, E, Acc) when is_list(L) ->
 			, {<<"packet_number">>, 123}
 			])).
 
-	serialize_get_nid_test() ->
+	serialize_get_cid_test() ->
 		?assertEqual({ok, <<10, 1:32/little, 123, 3, 16, 0, 0>>}, serialize([
 			  {<<"unique_id">>, 1}
 			, {<<"type">>, <<"command">>}
-			, {<<"command">>, <<"get_nid">>}
+			, {<<"command">>, <<"get_cid">>}
 			, {<<"packet_number">>, 123}
 			])).
 

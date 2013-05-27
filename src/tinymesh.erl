@@ -325,21 +325,21 @@ expand_cmd(16#01 = Arg, SetGPIOs0, ClearGPIOs0) ->
 
 	Outputs = lists:ukeymerge(1, ClearGPIOs, SetGPIOs),
 
-	[{command, cmd_arg(Arg)}, {outputs, Outputs}];
+	[{command, cmd_arg(Arg)}, {output, Outputs}];
 expand_cmd(16#02 = Arg, PWM, _) ->
-	[{command, cmd_arg(Arg)}, {pwm, PWM}];
+	[{command, cmd_arg(Arg)}, {pwm, binary:decode_unsigned(PWM)}];
 expand_cmd(Arg, _, _) -> [{command, cmd_arg(Arg)}].
 
 -spec digital_io(<<_:8>>) -> [digital_io(), ...].
 digital_io(<<D7:1, D6:1, D5:1, D4:1, D3:1, D2:1, D1:1, D0:1>>) ->
-		[ {digital_io_0, D0}
-		, {digital_io_1, D1}
-		, {digital_io_2, D2}
-		, {digital_io_3, D3}
-		, {digital_io_4, D4}
-		, {digital_io_5, D5}
-		, {digital_io_6, D6}
-		, {digital_io_7, D7}].
+		[ {0, D0}
+		, {1, D1}
+		, {2, D2}
+		, {3, D3}
+		, {4, D4}
+		, {5, D5}
+		, {6, D6}
+		, {7, D7}].
 
 version(<<Major:8/integer, Min0:4/integer, Min1:4/integer>>) ->
 	<<Major:8, $., Min0:8, Min1>>.

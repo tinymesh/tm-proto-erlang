@@ -126,9 +126,9 @@ ack() ->
 unserialize(<<Chksum:8, _/binary>> = Buf) when byte_size(Buf) >= Chksum ->
 	try proc(Buf) of
 		{ok, Msgs} ->
-			{ok, [[{atom_to_binary(K, utf8), V} || {K, V} <- Msg ] || Msg <- Msgs]};
+			{ok, maptree(Msgs, fun map_elem/1)};
 		{ok, Msgs, Rest} ->
-			{ok, [[{atom_to_binary(K, utf8), V} || {K, V} <- Msg ] || Msg <- Msgs], Rest};
+			{ok, maptree(Msgs, fun map_elem/1), Rest};
 		Res ->
 			Res
 	catch
@@ -141,6 +141,20 @@ unserialize(<<Chksum:8, _/binary>> = Bin) when byte_size(Bin) < Chksum ->
 -spec unserialize(stream(), Partial :: buf()) -> {ok, [msg()], buf()} | {error, Reason :: term()}.
 unserialize(Buf, Partial) ->
 	unserialize(<<Partial/binary, Buf/binary>>).
+
+maptree(Tree, Fun) ->
+	lists:map(fun
+		({Key, Branch}) when is_list(Branch) ->
+			Fun({Key, maptree(Branch, Fun)});
+		(Branch) when is_list(Branch) ->
+			maptree(Branch, Fun);
+		(Leaf) ->
+			Fun(Leaf)
+	end, Tree).
+
+map_elem({K, V}) when is_atom(K) ->
+	{atom_to_binary(K, utf8), V};
+map_elem(Ret) -> Ret.
 
 -spec proc(buf()) -> {ok, list(msg()), binary()}.
 proc(Buf) ->

@@ -13,7 +13,7 @@
 -type msg_ext() :: [{binary(), non_neg_integer() | float() | binary()}].
 -type msg() :: [ checksum() | system_id() | unique_id() | rssi()
                | network_lvl() | jump_count() | packet_number()
-               | latency() | type() | detail() | msg_data()
+               | latency() | type() | detail() | msg_data() | cmd_number()
                | address() | temperature() | voltage() | digital_io()
                | analog_io() | hardware() | firmware()].
 
@@ -24,6 +24,7 @@
 -type network_lvl()   :: {network_lvl,   0..255}.
 -type jump_count()    :: {jump_count,    0..255}.
 -type packet_number() :: {packet_number, 0..65535}.
+-type cmd_number()    :: {cmd_number,    0..255}.
 -type latency()       :: {latency,       0..65535}.
 -type type()          :: {type,          binary()}.
 -type detail()        :: {detail,        binary()}.
@@ -228,9 +229,8 @@ proc(<<Checksum:8/unsigned-integer,
 	end, {false, []}, binary:bin_to_list(Config0)),
 
 	Msg = [
-		  {checksum, Checksum}
-		, {unique_id, UniqueID}
-		, {cmd_num, CmdNum}
+		  {unique_id, UniqueID}
+		, {cmd_number, CmdNum}
 		, {type, <<"command">>}
 		, {command, <<"set_config">>}
 		, {config, Config}],
@@ -238,19 +238,18 @@ proc(<<Checksum:8/unsigned-integer,
 	proc(Rest, [Msg | Acc]);
 
 %% command:*
-proc(<<Checksum:8/unsigned-integer,
+proc(<<_Checksum:8/unsigned-integer,
        UniqueID:32/little-unsigned-integer, % Destination address
        CmdNum:8/unsigned-integer,
        16#03,
        Arg:8,
-       Data1:8/binary,
-       Data2:8/binary,
+       Data1:8/binary-unit:1,
+       Data2:8/binary-unit:1,
        Rest/binary>>, Acc) ->
 
 	Msg = [
-		  {checksum, Checksum}
-		, {unique_id, UniqueID}
-		, {cmd_num, CmdNum}
+		  {unique_id, UniqueID}
+		, {cmd_number, CmdNum}
 		, {type, <<"command">>}
 		| expand_cmd(Arg, Data1, Data2)],
 
@@ -300,10 +299,10 @@ expand_event2(<<"power_on">>, MsgData, Address) ->
 	[{trigger, power_trigger(MsgData)}, {msg_data, MsgData}, {locator, Address}];
 expand_event2(<<"ack">>, MsgData, Address) ->
 	<<CmdNum:8, _:8>> = MsgData,
-	[{cmd_num, CmdNum}, {msg_data, MsgData}, {locator, Address}];
+	[{cmd_number, CmdNum}, {msg_data, MsgData}, {locator, Address}];
 expand_event2(<<"nack">>, MsgData, Address) ->
 	<<CmdNum:8, Reason:8>> = MsgData,
-	[ {cmd_num, CmdNum}, {reason, nack_reason(Reason)},
+	[ {cmd_number, CmdNum}, {reason, nack_reason(Reason)},
 	  {msg_data, MsgData}, {locator, Address}];
 expand_event2(_, MsgData, Address) -> [{msg_data, MsgData}, {locator, Address}].
 
@@ -346,7 +345,7 @@ serialize(Msg) ->
 serialize(<<"command">>, Msg) ->
 	?match(Command, "command", Msg),
 	?match(UniqueID, "unique_id", Msg),
-	?match(CmdNum, "packet_number", Msg),
+	?match(CmdNum, "cmd_number", Msg),
 
 	case Command of
 		<<"serial">> ->
@@ -438,14 +437,14 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 			  {<<"unique_id">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"serial">>}
-			, {<<"packet_number">>, 120}
+			, {<<"cmd_number">>, 120}
 			, {<<"data">>, <<"abcd">>}
 		])]),
 		?assertEqual({ok, [<<11, 1:32/little, 120, 17, "abcd">>]}, serialize([
 			  {<<"unique_id">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"serial">>}
-			, {<<"packet_number">>, 120}
+			, {<<"cmd_number">>, 120}
 			, {<<"data">>, <<"abcd">>}
 		])).
 
@@ -454,7 +453,7 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 			  {<<"unique_id">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"get_status">>}
-			, {<<"packet_number">>, 122}
+			, {<<"cmd_number">>, 122}
 			])).
 
 	serialize_get_config_test() ->
@@ -462,7 +461,7 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 			  {<<"unique_id">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"get_config">>}
-			, {<<"packet_number">>, 123}
+			, {<<"cmd_number">>, 123}
 			])).
 
 	serialize_get_cid_test() ->
@@ -470,7 +469,7 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 			  {<<"unique_id">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"get_cid">>}
-			, {<<"packet_number">>, 123}
+			, {<<"cmd_number">>, 123}
 			])).
 
 	serialize_set_output_test() ->
@@ -478,7 +477,7 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 			  {<<"unique_id">>, 123}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"set_output">>}
-			, {<<"packet_number">>, 124}
+			, {<<"cmd_number">>, 124}
 		],
 		?assertEqual({error, {missing_field, output}}, serialize(Base)),
 		?assertEqual({ok, [<<10, 123, 0, 0, 0, 124, 3, 1, 255, 0>>]}, serialize(Base ++ [
@@ -503,13 +502,13 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 			  {<<"unique_id">>, 123}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"set_pwm">>}
-			, {<<"packet_number">>, 125}
+			, {<<"cmd_number">>, 125}
 		])),
 		?assertEqual({ok, [<<10, 123, 0, 0, 0, 126, 3, 2, 50, 0>>]}, serialize([
 			  {<<"unique_id">>, 123}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"set_pwm">>}
-			, {<<"packet_number">>, 126}
+			, {<<"cmd_number">>, 126}
 			, {<<"pwm">>, 50}
 		])).
 
@@ -519,7 +518,7 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 				  {<<"unique_id">>, 123}
 				, {<<"type">>, <<"no-such-command">>}
 				, {<<"command">>, unknown_command_atom}
-				, {<<"packet_number">>, 127}],
+				, {<<"cmd_number">>, 127}],
 			?assertEqual({error, msg_type}, serialize(Payload))
 		  end)}
 		, {"unknown command", ?_test(begin
@@ -527,14 +526,14 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 				  {<<"unique_id">>, 123}
 				, {<<"type">>, <<"command">>}
 				, {<<"command">>, <<"unknown_command_atom">>}
-				, {<<"packet_number">>, 128}
+				, {<<"cmd_number">>, 128}
 			],
 			?assertEqual({error, unknown_command}, serialize(Payload))
 		  end)}
 		, {"missing destination", ?_test(begin
 			?assertEqual({error, {missing_field, unique_id}}, serialize([
 				  {<<"type">>, <<"command">>}
-				, {<<"packet_number">>, 129}
+				, {<<"cmd_number">>, 129}
 				, {<<"command">>, serial}
 			]))
 		  end)}
@@ -545,7 +544,7 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 			  {<<"unique_id">>, 123}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"set_config">>}
-			, {<<"packet_number">>, 130}
+			, {<<"cmd_number">>, 130}
 			, {<<"config">>,
 				[
 					{<<"max_jump_count">>, 2}
@@ -558,7 +557,7 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 		  {<<"unique_id">>,     6}
 		, {<<"type">>,          <<"command">>}
 		, {<<"command">>,       <<"set_output">>}
-		, {<<"packet_number">>, 0}],
+		, {<<"cmd_number">>, 0}],
 		?assertEqual({ok, [<<10,6,0,0,0,0,3,1,192,0>>]}
 		, tinymesh:serialize([{<<"output">>,[{<<"6">>,true},{<<"7">>,true}]}|Base])).
 
@@ -567,13 +566,13 @@ build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
 			  {<<"unique_id">>, 2}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"serial">>}
-			, {<<"packet_number">>, 131}
+			, {<<"cmd_number">>, 131}
 			, {<<"data">>, <<"abcd">>}
 		],
 		Payload2 = [
 			  {<<"type">>, <<"command">>}
 			, {<<"unique_id">>, 3}
-			, {<<"packet_number">>, 132}
+			, {<<"cmd_number">>, 132}
 			, {<<"command">>, <<"get_status">>}
 		],
 		?assertEqual({ok, [<<11,2,0,0,0,131,17,$a,$b,$c,$d>>]}, serialize(Payload)),

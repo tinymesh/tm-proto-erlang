@@ -1,14 +1,36 @@
 -module(tinymesh_config).
 
--type cfgval() :: {Key :: atom(), Value :: any()}.
+-export([
+	  index/1
+	, pack/1
+	, unpack/1
+	, unpack/3
+	, pack_val/1]).
+
+-type key() ::   rf_channel | rf_power | rf_data_rate | protocol_mode
+               | rssi_threshold  | rssi_assesment | hiam_time
+               | ima_time | connect_check_time | max_jump_level
+               | max_jump_count | max_packet_latency | rf_retry_limit
+               | serial_timeout | device_type | gpio_0_config
+               | gpio_1_config | gpio_2_config | gpio_3_config
+               | gpio_4_config | gpio_5_config | gpio_6_config
+               | gpio_7_config | gpio_0_trigger | gpio_1_trigger
+               | gpio_2_trigger | gpio_3_trigger | gpio_4_trigger
+               | gpio_5_trigger | gpio_6_trigger | gpio_7_trigger
+               | input_debounce | gpio_0_hi_hi_triggerlevel
+               | gpio_0_hi_lo_triggerlevel | gpio_0_lo_hi_triggerlevel
+               | gpio_0_lo_lo_triggerlevel | gpio_0_sample_rate
+               | gpio_1_hi_hi_triggerlevel | gpio_1_hi_lo_triggerlevel
+               | gpio_1_lo_hi_triggerlevel | gpio_1_lo_lo_triggerlevel
+               | gpio_1_sample_rate | cts_hold_time | locator
+               | node_id | system_id | baud_rate | model | hw_version
+               | fw_version | ima_on_connect | pwm_default.
+
+-type cfgval() :: {key(), binary() | integer()}.
 -type cfglist() :: [cfgval(), ...].
-%%-type cfgdef() :: {Key :: atom(),Address :: byte(),Length :: non_neg_integer()}.
-%%-type payload() :: [payloaditem(), ...].
-%%-type payloaditem() :: [{Address :: non_neg_integer(), Value :: non_neg_integer()}].
 
 -export_type([cfglist/0]).
 
--export([pack/1, unpack/1, unpack/3, pack_val/1]).
 -define(CONFIGPARAMS, [
 	{rf_channel,                0,  1, int},   {rf_power,                  1,  1, int},
 	{rf_data_rate,              2,  1, int},   {protocol_mode,             3,  1, int},
@@ -34,9 +56,18 @@
 	{cts_hold_time,             43, 1, int},   {locator,                   44, 1, int},
 	{node_id,                   45, 4, int},   {system_id,                 49, 4, int},
 	{baud_rate,                 53, 1, int},   {model,                     60, 8, binary},
-	{hw_version,                75, 3, float}, {fw_version,                77, 3, float},
+	{hw_version,                75, 3, vsn},   {fw_version,                77, 3, vsn},
 	{ima_on_connect,            94, 1, int},   {pwm_default,               95, 1, int}]
 ).
+
+-spec index(non_neg_integer()) -> {ok, key()} | {error, {not_found, integer()}}.
+index(N) ->
+	case [X || {_,Offset,Length,_} = X <-
+	         ?CONFIGPARAMS, Offset =< N, N + 1 - Length =< Offset ] of
+		[{Key,_,_,_}] ->
+			{ok, Key};
+		[] -> {error, {not_found, N}}
+	end.
 
 -spec unpack(Data :: binary()) -> (Config :: [cfgval(), ...]).
 unpack(Data) ->
@@ -46,34 +77,27 @@ unpack(Data) ->
 unpack(<<>>, Acc,  _) ->
 	lists:reverse(Acc);
 
-unpack(Data, Acc, Offset) ->
-	case [{A, B, C, D} || {A, B, C, D} <-
-	         ?CONFIGPARAMS, B =< Offset, Offset + 1 - C =< B ] of
+unpack(Data, Acc, N) ->
+	case [X || {_,Offset,Length,_} = X <-
+	         ?CONFIGPARAMS, Offset =< N, N + 1 - Length =< Offset ] of
 		[{Key, _, Len, Type}] ->
-			case Type of
+			{Tail, Val} = case Type of
 				int ->
-					<<Val:Len/little-unsigned-integer-unit:8, Tail/binary>> = Data;
-				float ->
-					Len2  = Len - 2,
-					<<X:Len2/binary, Y:2/binary-unit:8, Tail/binary>> = Data,
-					%%	A+48 -> integer to ascii conversion:
-					%%  0 := 48, 1 := 49, n := (n+48), 9 := 57
-					X2 = << <<(A+48)>> || <<A>> <= X>>,
-					Y2 = << <<(A+48)>> || <<A>> <= Y>>,
-					Val = << X2/binary, $., Y2/binary >>;
-					%% If someone decides that ASCII is all wrong this can be used
-					%% as an alternative
-					%%<<Int:Len/binary-unit:8, Tail/binary>> = Data,
-					%%Val = list_to_binary([integer_to_list(A) || A <- binary_to_list(Int)]);
+					<<Val0:Len/little-unsigned-integer-unit:8, Tail0/binary>> = Data,
+					{Tail0, Val0};
 				binary ->
-					<<Val:Len/binary-unit:8, Tail/binary>> = Data
-			end,
-			unpack(Tail, [{Key, Val}|Acc], Offset + Len);
+					<<Val0:Len/binary-unit:8, Tail0/binary>> = Data,
+					{Tail0, Val0};
+				vsn ->
+					<<Maj:8/integer, Min0:8/integer, Min1:8/integer, Tail0/binary>> = Data,
+					{Tail0, <<((Maj + 48)), $., ((Min0 + 48)), ((Min1 + 48))>>}
+				end,
+			unpack(Tail, [{Key, Val}|Acc], N + Len);
 		[] ->
 			%% If this happends, config is invalid and the rest of the config
 			%% should be disregarded ACK-INVALID
 			<<_:8, Tail/binary>> = Data,
-			unpack(Tail, Acc, Offset + 1)
+			unpack(Tail, Acc, N + 1)
 	end.
 
 -spec pack(Config :: [cfgval()]) -> iolist().
@@ -111,11 +135,11 @@ pack_val({Key, Value}) when is_binary(Value) ->
 
 	unpack_test() ->
 		%% Test unpacking a single integer value
-		?assert([{rf_channel, 1}] == unpack(<<1:8>>)),
+		?assertEqual([{rf_channel, 1}], unpack(<<1:8>>)),
 		%% Test float value, it defaults to 2-digit precision
-		?assert([{hw_version, <<"1.23">>}] == unpack(list_to_binary([1,2,3]), [], 75)),
+		?assertEqual([{hw_version, <<"1.23">>}], unpack(<<1,2,3>>, [], 75)),
 		%% Test string value
-		?assert([{model, <<"model123">>}] == unpack(<<"model123">>, [], 60)),
+		?assertEqual([{model, <<"model123">>}], unpack(<<"model123">>, [], 60)),
 		%% Validate 1 whole config
 		Config = [ 16#01, 16#00, 16#00, 16#00, 16#02, 16#01, 16#00, 16#00, 16#83,
 			16#01, 16#01, 16#00, 16#06, 16#00, 16#06, 16#02, 16#21, 16#07, 16#05,
@@ -131,48 +155,51 @@ pack_val({Key, Value}) when is_binary(Value) ->
 			16#00, 16#00, 16#00, 16#00, 16#01, 16#00, 16#00, 16#00, 16#00, 16#00,
 			16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#52, 16#46
 		],
-		?assert(52 == length(unpack(list_to_binary(Config)))).
 
-
-
+		?assertEqual(52, length(unpack(list_to_binary(Config)))).
 
 	pack_val_test() ->
 		%% Test data-integrity loss
-		?assert([] == pack_val({non_existing_config_parameter, 12345})),
-		?assert([] == pack_val({rw_power, -1})),
+		?assertEqual([], pack_val({non_existing_config_parameter, 12345})),
+		?assertEqual([], pack_val({rf_power, -1})),
 		%% Test single byte fields are packed
-		?assert([[1, 20]] == pack_val({rf_power, 20})),
-		?assert([]        == pack_val({rf_power, 16#F0FF})),
+		?assertEqual([[1, 20]], pack_val({rf_power, 20})),
+		?assertEqual([], pack_val({rf_power, 16#F0FF})),
 
 		%% Test multi-byte fields are packed correctly
 		M = 16#FF,
 		[P] = [B || {hw_version, B, _, _} <- ?CONFIGPARAMS],
-		?assert([[P,0], [P+1,1], [P+2,1]] == pack_val({hw_version, 16#101})),
-		?assert([[P,2], [P+1,0], [P+2,1]] == pack_val({hw_version, 16#20001})),
-		?assert([[P,M], [P+1,M], [P+2,M]] == pack_val({hw_version, 16#FFFFFF})),
-		?assert([] == pack_val({hw_version, 16#FFFFFFFF})),
+		?assertEqual([[P,0], [P+1,1], [P+2,1]], pack_val({hw_version, 16#101})),
+		?assertEqual([[P,2], [P+1,0], [P+2,1]], pack_val({hw_version, 16#20001})),
+		?assertEqual([[P,M], [P+1,M], [P+2,M]], pack_val({hw_version, 16#FFFFFF})),
+		?assertEqual([], pack_val({hw_version, 16#FFFFFFFF})),
 
 		%% Test string fields
 		StringMatch = [[A, 0]|| A <- lists:seq(60, 64)]
 		               ++ [[65, $a], [66, $b], [67, $c]],
-		?assert(StringMatch == pack_val({model, "abc"})).
+		?assertEqual(StringMatch, pack_val({model, "abc"})).
 
 	pack_test() ->
-		?assert([[[0,1]], [[1,2]], [[2,2]], [[3,1]]] == pack([{rf_channel,   1},
-		                                                      {rf_power,     2},
-		                                                      {rf_data_rate, 2},
-		                                                      {protocol_mode,1}
-		                                                     ])),
+		?assert([[[0,1]], [[1,2]], [[2,2]], [[3,1]]] == pack(
+			[{rf_channel,    1},
+		   {rf_power,      2},
+		   {rf_data_rate,  2},
+		   {protocol_mode, 1}
+		])),
+
 		%% Assert non existing parameters is not included
-		?assert([[[0,1]], [[1,2]], [[3,1]]]          == pack([{rf_channel,   1},
-		                                                      {rf_power,     2},
-		                                                      {non_existing, 2},
-		                                                      {protocol_mode,1}
-		                                                     ])),
+		?assert([[[0,1]], [[1,2]], [[3,1]]] == pack(
+			[{rf_channel,    1},
+		   {rf_power,      2},
+		   {non_existing,  2},
+		   {protocol_mode, 1}
+		])),
+
 		%% Assert out of bounds variables is not included
-		?assert([[[0,1]], [[1,2]]]                   == pack([{rf_channel,   1},
-		                                                     {rf_power,     2},
-		                                                     {rf_power,     -1},
-		                                                     {hw_version,   16#FFFFFFF}
-		                                                    ])).
+		?assert([[[0,1]], [[1,2]]] == pack(
+			[{rf_channel,   1},
+		   {rf_power,     2},
+		   {rf_power,     -1},
+		   {hw_version,   16#FFFFFFF}
+		])).
 -endif.

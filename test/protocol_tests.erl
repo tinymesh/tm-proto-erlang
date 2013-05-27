@@ -41,3 +41,9 @@ twoway_test() ->
 	{ok, Res} = tinymesh:unserialize(iolist_to_binary(Buf)),
 	?assertEqual(Items, lists:reverse(Res)),
 	?assertEqual(length(Cmds), length(Res)).
+
+partial_test() ->
+	{A, B} = {<<35,1,0,0,0,4,1,0,0,92,1,1,161,173>>,
+	          <<0,0,2,14,0:32,0,0,121,187,0,0:16,0:16,2,0,1,22>>},
+	{ok, _, Rest} = tinymesh:unserialize(<<B/binary, A/binary>>, A),
+	?assertMatch({ok, _}, tinymesh:unserialize(B, Rest)).

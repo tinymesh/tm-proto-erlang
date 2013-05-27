@@ -178,8 +178,7 @@ proc(<<Checksum:8/unsigned-integer,
 
 	Detail = event_detail(Detail0),
 	Msg0 = [
-		  {checksum, Checksum}
-		, {system_id, SystemID}
+		  {system_id, SystemID}
 		, {unique_id, UniqueID}
 		, {rssi, RSSI}
 		, {network_lvl, NetworkLevel}
@@ -210,8 +209,7 @@ proc(<<Checksum:8/unsigned-integer,
 	<<Payload:PayloadSize/binary, Rest/binary>> = Buf,
 
 	Msg = [
-		  {checksum, Checksum}
-		, {system_id, SystemID}
+		  {system_id, SystemID}
 		, {unique_id, UniqueID}
 		, {rssi, RSSI}
 		, {network_lvl, NetworkLevel}
@@ -226,7 +224,7 @@ proc(<<Checksum:8/unsigned-integer,
 	proc(Rest, [Msg | Acc]);
 
 %% command:set_config
-proc(<<Checksum:8/unsigned-integer,
+proc(<<_Checksum:8/unsigned-integer,
        UniqueID:32/little-unsigned-integer, % Destination address
        CmdNum:8/unsigned-integer,
        16#03,

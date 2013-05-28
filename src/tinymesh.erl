@@ -30,7 +30,7 @@
 -type detail()        :: {detail,        binary()}.
 -type msg_data()      :: {msg_data,      0..65535}.
 -type address()       :: {address,       0..4294967295}.
--type temperature()   :: {temperature,   0..128}.
+-type temperature()   :: {temperature,   -128..128}.
 -type voltage()       :: {voltage,       float()}.
 -type digital_io()    :: { digital_io_0 | digital_io_1 | digital_io_2
                          | digital_io_3 | digital_io_4 | digital_io_5

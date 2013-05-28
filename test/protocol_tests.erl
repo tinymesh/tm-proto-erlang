@@ -67,5 +67,10 @@ frame_long_serial_test() ->
 		?assertEqual(Match0, lists:ukeysort(1, Match1)),
 		I + 1
 	end, CmdNum, Items),
+	?assertEqual(NumItems, Num - CmdNum),
 
-	?assertEqual(NumItems, Num - CmdNum).
+	%% Check that CmdNum is bounded
+	{ok, [_,_] = Serialized} = tinymesh:serialize(Fun(255, binary:copy(<<"b">>, 120 * 2))),
+	{ok, [M1, M2]} = tinymesh:unserialize(iolist_to_binary(Serialized)),
+	?assertEqual({<<"cmd_number">>, 255}, lists:keyfind(<<"cmd_number">>, 1, M1)),
+	?assertEqual({<<"cmd_number">>,   1}, lists:keyfind(<<"cmd_number">>, 1, M2)).

@@ -16,7 +16,7 @@
                | latency() | type() | detail() | msg_data() | cmd_number()
                | address() | temperature() | voltage() | digital_io()
                | analog_io() | hardware() | firmware()].
-
+-type msg_bin() :: [{binary(), integer() | float() | binary()}].
 -type checksum()      :: {checksum,      non_neg_integer()}.
 -type system_id()     :: {system_id,     1..4294967295}.
 -type unique_id()     :: {unique_id,     1..4294967295}.
@@ -113,10 +113,10 @@ Fun(N) when is_integer(N) ->
 -spec handshake(non_neg_integer()) -> {ok, [binary()]}.
 handshake(PacketNumber) ->
 	tinymesh:serialize([
-		  {unique_id,     0}
-		, {type,          <<"command">>}
-		, {command,       <<"get_cid">>}
-		, {packet_number, PacketNumber}
+		  {<<"unique_id">>,     0}
+		, {<<"type">>,          <<"command">>}
+		, {<<"command">>,       <<"get_cid">>}
+		, {<<"cmd_number">>,    PacketNumber}
 	]).
 
 -spec ack() -> {ok, binary()}.
@@ -367,7 +367,7 @@ digital_io(<<D7:1, D6:1, D5:1, D4:1, D3:1, D2:1, D1:1, D0:1>>) ->
 version(<<Major:8/integer, Min0:4/integer, Min1:4/integer>>) ->
 	<<Major:8, $., Min0:8, Min1>>.
 
--spec serialize(msg()) -> {ok, [buf()]} | {error, Reason :: term()}.
+-spec serialize(msg_bin()) -> {ok, [buf()]} | {error, Reason :: term()}.
 serialize(Msg) ->
 	try
 		?match(Type, "type", Msg),
@@ -631,4 +631,8 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 		?assertEqual({ok, [<<10,3,0,0,0,132,3,17,0,0>>]}, serialize(Payload2)).
 		% Try serializing nothing
 		%%serialize([]).
+
+	handshake_test() ->
+		Handshake = <<10,0,0,0,0,44,3,16,0,0>>,
+		?assertEqual({ok, [Handshake]}, tinymesh:handshake(44)).
 -endif.

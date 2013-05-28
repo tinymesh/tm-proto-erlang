@@ -234,12 +234,14 @@ proc(<<_Checksum:8/unsigned-integer,
        Config0:32/binary,
        Rest/binary>>, Acc) ->
 
-	Config = lists:foldl(fun
+	{_, Config} = lists:foldl(fun
 		(K, {false, Cfg}) ->
 			{K, Cfg};
-	  (V, {K, Cfg}) ->
+		(0, {0, Cfg}) ->
+			{false, Cfg};
+		(V, {K, Cfg}) ->
 			{config_index, {ok, Key}} = {config_index, tinymesh_config:index(K)},
-			{false, lists:keystore(K, 1, Cfg, {Key, K, V})}
+			{false, lists:keystore(Key, 1, Cfg, {Key, V})}
 	end, {false, []}, binary:bin_to_list(Config0)),
 
 	Msg = [

@@ -76,6 +76,27 @@ frame_long_serial_test() ->
 	?assertEqual({<<"cmd_number">>,   1}, lists:keyfind(<<"cmd_number">>, 1, M2)).
 
 
+unserialize_config_test() ->
+	Msg = fun(Config) ->
+		[ {<<"type">>, <<"command">>}, {<<"unique_id">>, 16#44332211}
+		, {<<"cmd_number">>, 201}, {<<"command">>, <<"set_config">>}
+		, {<<"config">>, Config} ] end,
+
+	{ok, [<<Buf0:8/binary, _:8, Buf1/binary>> = Buf]} =
+		tinymesh:serialize(Msg([{<<"rf_power">>, 10}])),
+
+	Res = tinymesh:unserialize(<<Buf0/binary, 255/integer, Buf1/binary>>),
+	?assertEqual({error, {invalid_config_index, 255}}, Res),
+
+	      Match0   = lists:ukeysort(1, Msg([{<<"rf_power">>, 10}])),
+	{ok, [Match1]} = tinymesh:unserialize(Buf),
+	io:format("mjau: ~p~n", [Match1]),
+	?assertEqual(Match0, lists:ukeysort(1, Match1)).
+
+%	?assertEqual(
+%		  {error, {invalid_config_index, unknown_key}}
+%		, tinymesh:serialize(Msg([{unknown_key, -1}]))).
+
 %% command:set_config messages can be dropped if they exceed > 20 items
 split_config_test() ->
 	Config =

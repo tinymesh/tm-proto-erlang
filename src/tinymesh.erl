@@ -125,9 +125,11 @@ ack() ->
 -spec unserialize(stream()) -> {ok, [msg_ext()], buf()} | {error, Reason :: term()}.
 unserialize(<<Chksum:8, _/binary>> = Buf) when byte_size(Buf) >= Chksum ->
 	try proc(Buf) of
-		{ok, Msgs} ->
+		{ok, Msgs0} ->
+			Msgs = lists:reverse(Msgs0),
 			{ok, maptree(Msgs, fun map_elem/1)};
-		{ok, Msgs, Rest} ->
+		{ok, Msgs0, Rest} ->
+			Msgs = lists:reverse(Msgs0),
 			{ok, maptree(Msgs, fun map_elem/1), Rest};
 		Res ->
 			Res

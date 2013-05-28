@@ -39,7 +39,7 @@ twoway_test() ->
 
 	%% Check that we can do all at once
 	{ok, Res} = tinymesh:unserialize(iolist_to_binary(Buf)),
-	?assertEqual(Items, lists:reverse(Res)),
+	?assertEqual(Items, Res),
 	?assertEqual(length(Cmds), length(Res)).
 
 

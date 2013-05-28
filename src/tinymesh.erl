@@ -384,7 +384,14 @@ serialize(<<"command">>, Msg) ->
 	case Command of
 		<<"serial">> ->
 			?match(Serial, "data", Msg),
-			{ok, [ <<((size(M) + 1)):8, M/binary>> || M <- build_serial(Serial, UniqueID, CmdNum, [])]};
+			Buf = [<<((size(M) + 1)):8, M/binary>> || M
+				<- build_serial(Serial, UniqueID, CmdNum, [])],
+			{ok, Buf};
+		<<"set_config">> ->
+			?match(Config, "config", Msg),
+			Buf = [<<((size(M) + 1)):8, M/binary>> || M
+				<- build_set_config(Config, UniqueID, CmdNum, [])],
+			{ok, Buf};
 		Command ->
 			case serialize(<<"command">>, Command, Msg) of
 				{error, _} = Err ->
@@ -408,12 +415,6 @@ serialize(<<"command">>, <<"set_pwm">> = Arg, Msg) ->
 	?match(PWM, "pwm", Msg),
 	<<CmdArg/integer, PWM/integer, 0>>;
 
-serialize(<<"command">>, <<"set_config">> = Arg, Msg) ->
-	CmdArg = cmd_arg(Arg),
-	?match(Payload, "config", Msg),
-	Config  = iolist_to_binary(lists:flatten(tinymesh_config:pack(Payload))),
-	<<CmdArg/integer, Config/binary, 0:(32-byte_size(Config))/integer-unit:8>>;
-
 serialize(<<"command">>, Command, _Msg) ->
 	try cmd_arg(Command) of
 		CmdArg ->
@@ -435,6 +436,22 @@ build_serial(<<Data/binary>>, UniqueID, CmdNum, Acc) when size(Data) =< 120 ->
 build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum, Acc0) ->
 	Acc = [<<UniqueID:32/little-integer, CmdNum/integer, 16#11, Data/binary>> | Acc0],
 	build_serial(Rest, UniqueID, (CmdNum + 1) rem 16#FF, Acc).
+
+build_set_config([], _UniqueID, _CmdNum, Acc0) ->
+	lists:reverse(Acc0);
+
+build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
+	{Config, Rest} = lists:split(min(length(Config0), 16), Config0),
+	Buf = iolist_to_binary(lists:flatten(tinymesh_config:pack(Config))),
+
+	Msg = <<UniqueID:32/little-integer
+	      , CmdNum/integer
+	      , 16#03
+	      , ((cmd_arg(<<"set_config">>)))/integer
+	      , Buf/binary
+	      , 0:(32-byte_size(Buf))/integer-unit:8>>,
+
+	build_set_config(Rest, UniqueID, CmdNum, [Msg | Acc0]).
 
 -ifdef(TEST).
 	-include_lib("eunit/include/eunit.hrl").

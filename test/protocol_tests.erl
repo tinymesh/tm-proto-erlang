@@ -74,3 +74,26 @@ frame_long_serial_test() ->
 	{ok, [M1, M2]} = tinymesh:unserialize(iolist_to_binary(Serialized)),
 	?assertEqual({<<"cmd_number">>, 255}, lists:keyfind(<<"cmd_number">>, 1, M1)),
 	?assertEqual({<<"cmd_number">>,   1}, lists:keyfind(<<"cmd_number">>, 1, M2)).
+
+
+%% command:set_config messages can be dropped if they exceed > 20 items
+split_config_test() ->
+	Config =
+		[ {rf_channel, 1}, {rf_power, 1}, {rf_data_rate, 1}
+		, {protocol_mode, 1}, {rssi_threshold, 1}, {rssi_assesment, 1}
+		, {hiam_time, 1}, {ima_time, 1}, {connect_check_time, 1}
+		, {max_jump_level, 1}, {max_jump_count, 1}, {max_packet_latency, 1}
+		, {rf_retry_limit, 1}, {serial_timeout, 1}, {device_type, 1}
+		, {gpio_0_config, 1}, {gpio_1_config, 1}, {gpio_2_config, 1}
+		, {gpio_3_config, 1}, {gpio_4_config, 1}, {gpio_5_config, 1}
+		, {gpio_6_config, 1}, {gpio_7_config, 1}, {gpio_0_trigger, 1}
+		, {gpio_1_trigger, 1}, {gpio_2_trigger, 1}, {gpio_3_trigger, 1}
+		, {gpio_4_trigger, 1}, {gpio_5_trigger, 1}, {gpio_6_trigger, 1}
+		, {gpio_7_trigger, 1}],
+
+	Msg =
+		[ {<<"type">>, <<"command">>}, {<<"unique_id">>, 16#11223344}
+		, {<<"cmd_number">>, 200}, {<<"command">>, <<"set_config">>}
+		, {<<"config">>, Config} ],
+
+	?assertMatch({ok, [_,_]}, tinymesh:serialize(Msg)).

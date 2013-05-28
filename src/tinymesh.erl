@@ -249,6 +249,26 @@ proc(<<_Checksum:8/unsigned-integer,
 
 	proc(Rest, [Msg | Acc]);
 
+%% command:serial
+proc(<<Checksum:8/unsigned-integer,
+       UniqueID:32/little-unsigned-integer, % Destination address
+       CmdNum:8/unsigned-integer,
+       16#11,
+       Buf/binary>>, Acc) ->
+
+	PayloadSize = Checksum - 7,
+	<<Payload:PayloadSize/binary, Rest/binary>> = Buf,
+
+	Msg =
+		[ {unique_id, UniqueID}
+		, {cmd_number, CmdNum}
+		, {type, <<"command">>}
+		, {command, <<"serial">>}
+		, {data, Payload}
+		],
+
+	proc(Rest, [Msg | Acc]);
+
 %% command:*
 proc(<<_Checksum:8/unsigned-integer,
        UniqueID:32/little-unsigned-integer, % Destination address
@@ -408,12 +428,11 @@ fold_output({N, 0},    {On, Off}) -> {On, Off + erlang:trunc(math:pow(2, N))}.
 
 
 build_serial(<<Data/binary>>, UniqueID, CmdNum, Acc) when size(Data) =< 120 ->
-	[<<UniqueID:32/little-integer, CmdNum/integer, 16#11, Data/binary>> | Acc];
+	lists:reverse([<<UniqueID:32/little-integer, CmdNum/integer, 16#11, Data/binary>> | Acc]);
 
-build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum0, Acc0) ->
-	CmdNum = (CmdNum0 + 1) rem 16#FF,
+build_serial(<<Data:120/binary, Rest/binary>>, UniqueID, CmdNum, Acc0) ->
 	Acc = [<<UniqueID:32/little-integer, CmdNum/integer, 16#11, Data/binary>> | Acc0],
-	build_serial(Rest, UniqueID, CmdNum, Acc).
+	build_serial(Rest, UniqueID, (CmdNum + 1) rem 16#FF, Acc).
 
 -ifdef(TEST).
 	-include_lib("eunit/include/eunit.hrl").

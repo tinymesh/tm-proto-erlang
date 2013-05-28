@@ -35,6 +35,7 @@
 -type digital_io()    :: { digital_io_0 | digital_io_1 | digital_io_2
                          | digital_io_3 | digital_io_4 | digital_io_5
                          | digital_io_6 | digital_io_7, 0 | 1}.
+-type digital_io_s()  :: { 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7, 0 | 1}.
 -type analog_io()     :: {analog_io_0 | analog_io_1, 0..65535}.
 -type hardware()      :: {hardware,      <<_:32>>}.
 -type firmware()      :: {firmware,      <<_:32>>}.
@@ -44,12 +45,12 @@
 
 %% Lookup integer key vs keyword
 -define(table(Fun, Table),
-Fun(N) when is_integer(N) ->
-	{N, Arg} = lists:keyfind(N, 1, Table),
-	Arg;
 Fun(Arg) when is_binary(Arg) ->
 	{N, Arg} = lists:keyfind(Arg, 2, Table),
-	N
+	N;
+Fun(N) when is_integer(N) ->
+	{N, Arg} = lists:keyfind(N, 1, Table),
+	Arg
 ).
 
 -define(cmd_args, [
@@ -109,16 +110,16 @@ Fun(Arg) when is_binary(Arg) ->
 ?table(nack_reason, ?nack_reasons).
 ?table(event_detail, ?event_details).
 
--spec handshake(non_neg_integer()) -> binary().
+-spec handshake(non_neg_integer()) -> {ok, [binary()]}.
 handshake(PacketNumber) ->
 	tinymesh:serialize([
-		  {<<"unique_id">>,     0}
-		, {<<"type">>,          <<"command">>}
-		, {<<"command">>,       <<"get_cid">>}
-		, {<<"packet_number">>, PacketNumber}
+		  {unique_id,     0}
+		, {type,          <<"command">>}
+		, {command,       <<"get_cid">>}
+		, {packet_number, PacketNumber}
 	]).
 
--spec ack() -> binary().
+-spec ack() -> {ok, binary()}.
 ack() ->
 	{ok, <<6>>}.
 
@@ -158,11 +159,9 @@ map_elem({K, V}) when is_atom(K) ->
 	{atom_to_binary(K, utf8), V};
 map_elem(Ret) -> Ret.
 
--spec proc(buf()) -> {ok, list(msg()), binary()}.
 proc(Buf) ->
 	proc(Buf, []).
 
--spec proc(buf(), list(msg())) -> {ok, list(msg()), binary()}.
 proc(<<Checksum:8/unsigned-integer,
        SystemID:32/little-unsigned-integer, % System wide ID
        UniqueID:32/little-unsigned-integer, % Device address
@@ -329,15 +328,15 @@ expand_event(Detail,
 		]]].
 
 expand_event2(<<"rf_tamper">>, MsgData, Address) ->
-	<<Duration:8/unsigned-integer, Ended:8/unsigned-integer>> = MsgData,
+	{Duration, Ended} = {MsgData bsr 8, MsgData band 16#ff},
 	[{duration, Duration}, {ended, Ended}, {locator, Address}];
 expand_event2(<<"power_on">>, MsgData, Address) ->
 	[{trigger, power_trigger(MsgData)}, {msg_data, MsgData}, {locator, Address}];
 expand_event2(<<"ack">>, MsgData, Address) ->
-	<<CmdNum:8, _:8>> = MsgData,
+	CmdNum = MsgData bsr 8,
 	[{cmd_number, CmdNum}, {msg_data, MsgData}, {locator, Address}];
 expand_event2(<<"nack">>, MsgData, Address) ->
-	<<CmdNum:8, Reason:8>> = MsgData,
+	{CmdNum, Reason} = {MsgData bsr 8, MsgData band 16#ff},
 	[ {cmd_number, CmdNum}, {reason, nack_reason(Reason)},
 	  {msg_data, MsgData}, {locator, Address}];
 expand_event2(_, MsgData, Address) -> [{msg_data, MsgData}, {locator, Address}].
@@ -354,7 +353,7 @@ expand_cmd(16#02 = Arg, PWM, _) ->
 	[{command, cmd_arg(Arg)}, {pwm, binary:decode_unsigned(PWM)}];
 expand_cmd(Arg, _, _) -> [{command, cmd_arg(Arg)}].
 
--spec digital_io(<<_:8>>) -> [digital_io(), ...].
+-spec digital_io(<<_:8>>) -> [digital_io_s(), ...].
 digital_io(<<D7:1, D6:1, D5:1, D4:1, D3:1, D2:1, D1:1, D0:1>>) ->
 		[ {0, D0}
 		, {1, D1}
@@ -403,6 +402,7 @@ serialize(<<"command">>, Msg) ->
 					{ok, [<<((size(Buf) + 1)):8, Buf/binary>>]}
 			end
 	end;
+
 serialize(_, _Msg) ->
 	{error, msg_type}.
 

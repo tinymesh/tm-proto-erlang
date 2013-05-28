@@ -1,0 +1,3 @@
+tinymesh.erl:109: Guard test is_binary(Arg::char()) can never succeed
+tinymesh.erl:110: Guard test is_binary(Arg::byte()) can never succeed
+tinymesh.erl:111: Guard test is_binary(Arg::byte()) can never succeed

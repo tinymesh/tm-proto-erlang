@@ -26,10 +26,9 @@
                | node_id | system_id | baud_rate | model | hw_version
                | fw_version | ima_on_connect | pwm_default.
 
--type cfgval() :: {key(), binary() | integer()}.
--type cfglist() :: [cfgval(), ...].
+-type cfgpair() :: {key(), binary() | integer()}.
 
--export_type([cfglist/0]).
+-export_type([cfgpair/0]).
 
 -define(CONFIGPARAMS, [
 	{rf_channel,                0,  1, int},   {rf_power,                  1,  1, int},
@@ -69,11 +68,11 @@ index(N) ->
 		[] -> {error, {not_found, N}}
 	end.
 
--spec unpack(Data :: binary()) -> (Config :: [cfgval(), ...]).
+-spec unpack(binary()) -> list(cfgpair()).
 unpack(Data) ->
 	unpack(Data,[], 0).
 
--spec unpack(Data :: binary(), Acc :: [cfgval()], Offset :: non_neg_integer()) -> [cfgval()].
+-spec unpack(binary(), list(cfgpair()), non_neg_integer()) -> list(cfgpair()).
 unpack(<<>>, Acc,  _) ->
 	lists:reverse(Acc);
 
@@ -100,11 +99,9 @@ unpack(Data, Acc, N) ->
 			unpack(Tail, Acc, N + 1)
 	end.
 
--spec pack(Config :: [cfgval()]) -> iolist().
 pack(Config) ->
 	pack(Config, []).
 
--spec pack(Config :: [cfgval(),...], Acc :: [cfgval(),...]) -> iolist().
 pack([], Acc)             -> lists:reverse(Acc);
 pack([Cur | Config], Acc) ->
 	case pack_val(Cur) of
@@ -113,18 +110,22 @@ pack([Cur | Config], Acc) ->
 	end.
 
 
--spec pack_val(cfgval() | binary()) -> iolist().
-pack_val({Key, Value}) when is_binary(Key) -> pack_val({binary_to_existing_atom(Key, utf8), Value});
-pack_val({_, Value}) when is_integer(Value), Value < 0 -> [];
-pack_val({Key, Value}) when is_list(Value) -> pack_val({Key, list_to_binary(Value)});
-pack_val({Key, Value}) when is_integer(Value) -> pack_val({Key, binary:encode_unsigned(Value)});
+pack_val({Key, Value}) when is_binary(Key) ->
+	pack_val({binary_to_existing_atom(Key, utf8), Value});
+pack_val({_, Value}) when is_integer(Value), Value < 0 ->
+	[];
+pack_val({Key, Value}) when is_list(Value) ->
+	pack_val({Key, list_to_binary(Value)});
+pack_val({Key, Value}) when is_integer(Value) ->
+	pack_val({Key, binary:encode_unsigned(Value)});
 pack_val({Key, Value}) when is_binary(Value) ->
 	ValueSize = byte_size(Value),
 	case lists:keyfind(Key, 1, ?CONFIGPARAMS) of
 	{_, Address, Length, _} when ValueSize =< Length ->
-		{Res, _} = lists:mapfoldl(fun(X, Acc) -> {[Acc, X], Acc+1} end,
-		                          Address, binary_to_list(
-		                           <<0:((Length-ValueSize)*8), Value/binary>>)),
+		{Res, _} = lists:mapfoldl(
+			  fun(X, Acc) -> {[Acc, X], Acc+1} end
+			, Address
+			, binary_to_list(<<0:((Length-ValueSize)*8), Value/binary>>)),
 		Res;
 	_ ->
 		[]

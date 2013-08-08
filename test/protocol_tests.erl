@@ -2,15 +2,17 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+-define(sysid, 1).
+
 unserialize_test() ->
 	{ok, Buf} = file:read_file("../test/data/messages.b64"),
 	[ ?assertMatch(
-		{ok, _}, tinymesh:unserialize( base64:decode(binary_to_list(X))))
+		{ok, _, <<>>}, tinymesh:unserialize( base64:decode(binary_to_list(X))))
 			|| <<_:88, X/binary>> <- binary:split(Buf,  <<10>>, [global])].
 
-twoway_test() ->
+cmd_twoway_test() ->
 	Cmd = fun(C, ID, N, Pre) ->
-		[{<<"type">>, <<"command">>}, {<<"unique_id">>, ID},
+		[{<<"type">>, <<"command">>}, {<<"uid">>, ID},
 		 {<<"cmd_number">>, N}, {<<"command">>, C} | Pre]
 	end,
 
@@ -28,7 +30,7 @@ twoway_test() ->
 
 	{Buf, Items} = lists:foldl(fun(Item, {AccB, AccI}) ->
 		{ok, [Buf]} = tinymesh:serialize(Item),
-		{ok, [M2]}  = tinymesh:unserialize(Buf),
+		{ok, [M2], <<>>}  = tinymesh:unserialize(Buf),
 
 		?assertEqual(
 			lists:usort(Item),
@@ -38,24 +40,95 @@ twoway_test() ->
 	end, {[], []}, Cmds),
 
 	%% Check that we can do all at once
-	{ok, Res} = tinymesh:unserialize(iolist_to_binary(Buf)),
+	{ok, Res, <<>>} = tinymesh:unserialize(iolist_to_binary(Buf)),
 	?assertEqual(Items, Res),
 	?assertEqual(length(Cmds), length(Res)).
+
+-define(pd(K, S), get(<<((atom_to_binary(K, utf8)))/binary, $:, S:16/integer>>)).
+-define(pd(K, S, V), put(<<((atom_to_binary(K, utf8)))/binary, $:, S:16/integer>>, V)).
+-define(pdi(K, S)
+	, put(<<((atom_to_binary(K, utf8)))/binary, $:, S:16/integer>>, ?pd(K, S) + 1)).
+
+general_event_toway_test() ->
+	Nodes = lists:map(fun(N) ->
+		?pd(networklvl, N, random:uniform(10)),
+		?pd(jump_count, N, random:uniform(10)),
+		?pd(packetnumber, N, random:uniform(16#FFFF)),
+		N
+	end, lists:seq(0, 100)),
+
+	[lists:foreach(fun(Y) ->
+		%% Some nodes likes serial more than others
+		M0 = lists:ukeysort(1, create_msg(N + Y band 32 bsr 7, N, Y)),
+		{ok, [M1]} = tinymesh:serialize(M0),
+		{ok, [M2], <<>>} = tinymesh:unserialize(M1),
+		?assertEqual(M0, lists:ukeysort(1, M2))
+	end, lists:seq(0, 500)) || N <- Nodes].
+
+
+msg_base(ID, Rest) ->
+	[ {<<"sid">>, ?sysid}, {<<"uid">>, ID}
+	, {<<"rssi">>, random:uniform(255)}, {<<"network_lvl">>, ?pd(networklvl, ID)}
+	, {<<"jump_count">>, ?pd(jump_count, ID)}, {<<"latency">>, random:uniform(512)}
+	, {<<"packet_number">>, ?pdi(packetnumber, ID) rem 16#FFFF} | Rest ].
+
+%% event:serial
+create_msg(1, N, Y) ->
+	Buf = <<"test data for ", N:8/integer, ":", Y:16/integer>>,
+	msg_base(N, [{<<"type">>, <<"event">>}, {<<"detail">>,
+<<"serial">>}, {<<"sequence">>, 0}, {<<"serial">>, Buf}]);
+
+%% event:get_config
+create_msg(0, N, _Y) ->
+	Ev =
+		[ {<<"type">>, <<"event">>}
+		, {<<"detail">>, <<"ima">>}
+		, {<<"msg_data">>, 0}
+		, {<<"locator">>, 0}
+		, {<<"temp">>, 22}
+		, {<<"voltage">>, 3.33}
+		, {<<"analog_io_0">>, 0}
+		, {<<"analog_io_1">>, 0}
+		, {<<"hardware">>, <<"2.00">>}
+		, {<<"firmware">>, <<"1.23">>}
+		| [ {<<"digital_io_", ((X + 48))>>, random:uniform(1)} || X <- lists:seq(0, 7) ]
+		],
+	msg_base(N, Ev).
+
+% @todo 2013-05-28; fix event:get_path / event:get_config generation
+%create_msg(2, N) ->
+%create_msg(3, N) ->
 
 
 partial_test() ->
 	{A, B} = {<<35,1,0,0,0,4,1,0,0,92,1,1,161,173>>,
 	          <<0,0,2,14,0:32,0,0,121,187,0,0:16,0:16,2,0,1,22>>},
 	{ok, _, Rest} = tinymesh:unserialize(<<B/binary, A/binary>>, A),
-	?assertMatch({ok, _}, tinymesh:unserialize(B, Rest)).
+	?assertMatch({ok, _, <<>>}, tinymesh:unserialize(B, Rest)),
 
+	Part2 = <<35,1,0,0,0,4,2,0,0,185,4,4,28,77,0,0,2,14,1,197,1,102,0,87,156>>,
+	Partial = <<
+	  35,1,0,0,0,1,2,0,0,157,2,2,28,46,0,0,2,14,1,203,1,96,0,105,167,111,220,7,255,0,1,2,0,1,34
+	, Part2/binary>>,
+
+	?assertMatch({ok, [_], Part2}, tinymesh:unserialize(Partial)),
+
+	P1 = <<
+	  35,1,0,0,0,1,2,0,0,157,2,2,28,46,0,0,2,14,1,203,1,96,0,105,167,111,220,7,255,0,1,2,0,1,34
+	, 35,1,0,0,0,4,2,0,0,185,4,4,28,77,0,0,2,14,1,197,1,102,0,87,156>>,
+	P2 = <<
+	  113,252,2,61,0,12,2,0,1,34
+	, 35,1,0,0,0,0,1,0,0,0,0,0,101,29,0,0,2,14,0,0,0,0,0,0,121,187,0,0,0,0,0,2,0,1,34>>,
+
+	{ok, [_], Buf} = tinymesh:unserialize(P1),
+	?assertMatch({ok, [_,_], <<>>}, tinymesh:unserialize(P2, Buf)).
 
 frame_long_serial_test() ->
 	NumItems = 10,
 	CmdNum = 10,
 	Data = binary:copy(<<"a">>, 120 * NumItems),
 	Fun = fun(N, D)->
-		[ {<<"type">>, <<"command">>}, {<<"unique_id">>, 123}
+		[ {<<"type">>, <<"command">>}, {<<"uid">>, 123}
 		, {<<"cmd_number">>, N}, {<<"command">>, <<"serial">>}
 		, {<<"data">>, D} ] end,
 
@@ -63,7 +136,7 @@ frame_long_serial_test() ->
 
 	Num = lists:foldl(fun(Item, I) ->
 		Match0 = lists:ukeysort(1, Fun(I, binary:copy(<<"a">>, 120))),
-		{ok, [Match1]} = tinymesh:unserialize(Item),
+		{ok, [Match1], <<>>} = tinymesh:unserialize(Item),
 		?assertEqual(Match0, lists:ukeysort(1, Match1)),
 		I + 1
 	end, CmdNum, Items),
@@ -71,14 +144,14 @@ frame_long_serial_test() ->
 
 	%% Check that CmdNum is bounded
 	{ok, [_,_] = Serialized} = tinymesh:serialize(Fun(255, binary:copy(<<"b">>, 120 * 2))),
-	{ok, [M1, M2]} = tinymesh:unserialize(iolist_to_binary(Serialized)),
+	{ok, [M1, M2], <<>>} = tinymesh:unserialize(iolist_to_binary(Serialized)),
 	?assertEqual({<<"cmd_number">>, 255}, lists:keyfind(<<"cmd_number">>, 1, M1)),
 	?assertEqual({<<"cmd_number">>,   1}, lists:keyfind(<<"cmd_number">>, 1, M2)).
 
 
 unserialize_config_test() ->
 	Msg = fun(Config) ->
-		[ {<<"type">>, <<"command">>}, {<<"unique_id">>, 16#44332211}
+		[ {<<"type">>, <<"command">>}, {<<"uid">>, 16#44332211}
 		, {<<"cmd_number">>, 201}, {<<"command">>, <<"set_config">>}
 		, {<<"config">>, Config} ] end,
 
@@ -89,8 +162,7 @@ unserialize_config_test() ->
 	?assertEqual({error, {invalid_config_index, 255}}, Res),
 
 	      Match0   = lists:ukeysort(1, Msg([{<<"rf_power">>, 10}])),
-	{ok, [Match1]} = tinymesh:unserialize(Buf),
-	io:format("mjau: ~p~n", [Match1]),
+	{ok, [Match1], <<>>} = tinymesh:unserialize(Buf),
 	?assertEqual(Match0, lists:ukeysort(1, Match1)).
 
 %	?assertEqual(
@@ -113,7 +185,7 @@ split_config_test() ->
 		, {gpio_7_trigger, 1}],
 
 	Msg =
-		[ {<<"type">>, <<"command">>}, {<<"unique_id">>, 16#11223344}
+		[ {<<"type">>, <<"command">>}, {<<"uid">>, 16#11223344}
 		, {<<"cmd_number">>, 200}, {<<"command">>, <<"set_config">>}
 		, {<<"config">>, Config} ],
 

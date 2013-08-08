@@ -11,26 +11,26 @@
 -type buf() :: binary().
 -type stream() :: binary().
 -type msg_ext() :: [{binary(), non_neg_integer() | float() | binary()}].
--type msg() :: [ checksum() | system_id() | unique_id() | rssi()
-               | network_lvl() | jump_count() | packet_number()
+-type msg() :: [ checksum() | sid() | uid() | rssi()
+               | network_lvl() | jump_count() | packet_num()
                | latency() | type() | detail() | msg_data() | cmd_number()
-               | address() | temperature() | voltage() | digital_io()
+               | address() | temp() | voltage() | digital_io()
                | analog_io() | hardware() | firmware()].
--type msg_bin() :: [{binary(), integer() | float() | binary()}].
+-type msg_bin()       :: [{binary(), integer() | float() | binary()}].
 -type checksum()      :: {checksum,      non_neg_integer()}.
--type system_id()     :: {system_id,     1..4294967295}.
--type unique_id()     :: {unique_id,     1..4294967295}.
+-type sid()           :: {sid,     1..4294967295}.
+-type uid()           :: {uid,     1..4294967295}.
 -type rssi()          :: {rssi,          0..255}.
 -type network_lvl()   :: {network_lvl,   0..255}.
 -type jump_count()    :: {jump_count,    0..255}.
--type packet_number() :: {packet_number, 0..65535}.
+-type packet_num()    :: {packet_num, 0..65535}.
 -type cmd_number()    :: {cmd_number,    0..255}.
 -type latency()       :: {latency,       0..65535}.
 -type type()          :: {type,          binary()}.
 -type detail()        :: {detail,        binary()}.
 -type msg_data()      :: {msg_data,      0..65535}.
 -type address()       :: {address,       0..4294967295}.
--type temperature()   :: {temperature,   -128..128}.
+-type temp()          :: {temp,   -128..128}.
 -type voltage()       :: {voltage,       float()}.
 -type digital_io()    :: { digital_io_0 | digital_io_1 | digital_io_2
                          | digital_io_3 | digital_io_4 | digital_io_5
@@ -90,7 +90,7 @@ Fun(N) when is_integer(N) ->
 	, {16#03, <<"analog_io_1_change">>}
 	, {16#04, <<"temp_warning">>}
 	, {16#05, <<"voltage_warning">>}
-	, {16#05, <<"rf_tamper">>}
+	, {16#06, <<"rf_tamper">>}
 	, {16#08, <<"power_on">>}
 	, {16#09, <<"ima">>}
 	, {16#0A, <<"network_busy">>} %% co-existing with same system id
@@ -113,7 +113,7 @@ Fun(N) when is_integer(N) ->
 -spec handshake(non_neg_integer()) -> {ok, [binary()]}.
 handshake(PacketNumber) ->
 	tinymesh:serialize([
-		  {<<"unique_id">>,     0}
+		  {<<"uid">>,           0}
 		, {<<"type">>,          <<"command">>}
 		, {<<"command">>,       <<"get_cid">>}
 		, {<<"cmd_number">>,    PacketNumber}
@@ -126,14 +126,11 @@ ack() ->
 -spec unserialize(stream()) -> {ok, [msg_ext()], buf()} | {error, Reason :: term()}.
 unserialize(<<Chksum:8, _/binary>> = Buf) when byte_size(Buf) >= Chksum ->
 	try proc(Buf) of
-		{ok, Msgs0} ->
-			Msgs = lists:reverse(Msgs0),
-			{ok, maptree(Msgs, fun map_elem/1)};
 		{ok, Msgs0, Rest} ->
 			Msgs = lists:reverse(Msgs0),
 			{ok, maptree(Msgs, fun map_elem/1), Rest};
-		Res ->
-			Res
+		{error, _} = Err ->
+			Err
 	catch
 		error:{badmatch, {config_index, {error, {not_found, N}}}} ->
 			{error, {invalid_config_index, N}}
@@ -162,6 +159,9 @@ map_elem(Ret) -> Ret.
 proc(Buf) ->
 	proc(Buf, []).
 
+proc(<<Checksum:8/unsigned-integer, _/binary>>, _Acc)
+	when Checksum < 10 ->
+	{error, invalid_data};
 proc(<<Checksum:8/unsigned-integer,
        SystemID:32/little-unsigned-integer, % System wide ID
        UniqueID:32/little-unsigned-integer, % Device address
@@ -172,26 +172,31 @@ proc(<<Checksum:8/unsigned-integer,
        Latency:16/unsigned-integer,         % Time since msg creation (10ms increment)
        16#02,                               % Message type: event message
        Detail0:8,
-       Buf/binary>>, Acc) ->
+       Buf/binary>> = PBuf, Acc) ->
 
 	PayloadSize = Checksum - 18,
-	<<Payload:PayloadSize/binary, Rest/binary>> = Buf,
 
-	Detail = event_detail(Detail0),
-	Msg0 = [
-		  {system_id, SystemID}
-		, {unique_id, UniqueID}
-		, {rssi, RSSI}
-		, {network_lvl, NetworkLevel}
-		, {jump_count, JumpCounter}
-		, {packet_number, PacketCounter}
-		, {latency, Latency}
-		, {type, <<"event">>}
-		, {detail, Detail}
-		],
+	if PayloadSize > size(Buf) ->
+		{ok, Acc, PBuf};
+	true ->
+		<<Payload:PayloadSize/binary, Rest/binary>> = Buf,
 
-	Msg = [Msg0 | expand_event(Detail, Payload)],
-	proc(Rest, [Msg | Acc]);
+		Detail = event_detail(Detail0),
+		Msg0 = [
+			  {sid, SystemID}
+			, {uid, UniqueID}
+			, {rssi, RSSI}
+			, {network_lvl, NetworkLevel}
+			, {jump_count, JumpCounter}
+			, {packet_num, PacketCounter}
+			, {latency, Latency}
+			, {type, <<"event">>}
+			, {detail, Detail}
+			],
+
+		Msg = Msg0 ++ expand_event(Detail, Payload),
+		proc(Rest, [Msg | Acc])
+	end;
 
 %% event:serial
 proc(<<Checksum:8/unsigned-integer,
@@ -210,14 +215,15 @@ proc(<<Checksum:8/unsigned-integer,
 	<<Payload:PayloadSize/binary, Rest/binary>> = Buf,
 
 	Msg = [
-		  {system_id, SystemID}
-		, {unique_id, UniqueID}
+		  {sid, SystemID}
+		, {uid, UniqueID}
 		, {rssi, RSSI}
 		, {network_lvl, NetworkLevel}
 		, {jump_count, JumpCounter}
-		, {packet_number, PacketCounter}
+		, {packet_num, PacketCounter}
 		, {latency, Latency}
-		, {type, <<"serial">>}
+		, {type, <<"event">>}
+		, {detail, <<"serial">>}
 		, {serial, Payload}
 		, {sequence, Seq}
 		],
@@ -244,7 +250,7 @@ proc(<<_Checksum:8/unsigned-integer,
 	end, {false, []}, binary:bin_to_list(Config0)),
 
 	Msg = [
-		  {unique_id, UniqueID}
+		  {uid, UniqueID}
 		, {cmd_number, CmdNum}
 		, {type, <<"command">>}
 		, {command, <<"set_config">>}
@@ -263,7 +269,7 @@ proc(<<Checksum:8/unsigned-integer,
 	<<Payload:PayloadSize/binary, Rest/binary>> = Buf,
 
 	Msg =
-		[ {unique_id, UniqueID}
+		[ {uid, UniqueID}
 		, {cmd_number, CmdNum}
 		, {type, <<"command">>}
 		, {command, <<"serial">>}
@@ -283,7 +289,7 @@ proc(<<_Checksum:8/unsigned-integer,
        Rest/binary>>, Acc) ->
 
 	Msg = [
-		  {unique_id, UniqueID}
+		  {uid, UniqueID}
 		, {cmd_number, CmdNum}
 		, {type, <<"command">>}
 		| expand_cmd(Arg, Data1, Data2)],
@@ -294,7 +300,7 @@ proc(<<_/binary>>, []) ->
 	{error, invalid_data};
 
 proc(<<>>, Acc) ->
-	{ok, Acc};
+	{ok, Acc, <<>>};
 
 proc(<<Rest/binary>>, Acc) ->
 	{ok, Acc, Rest}.
@@ -306,7 +312,7 @@ expand_event(<<"get_config">>, Config) ->
 expand_event(Detail,
 	<<MsgData:16/unsigned-integer,
 	  Address:32/integer,
-	  Temprature:8/signed-integer,
+	  Temp:8/signed-integer,
 	  Voltage0:8/unsigned-integer,
 	  DigitalIOs:8/binary-unit:1,
 	  AnalogIO0:16/unsigned-integer,
@@ -317,15 +323,16 @@ expand_event(Detail,
 	Base = expand_event2(Detail, MsgData, Address),
 	Voltage = erlang:trunc( (Voltage0 * 0.03) * 100) * 0.01,
 
-	Base ++ [
-		  {temprature, Temprature}
-		, {voltage, Voltage}
-		| [ digital_io(DigitalIOs)
-		  | [ {analog_io_0, AnalogIO0}
+	Base
+		++ [
+		  {temp, Temp}
+		, {voltage, Voltage}]
+		++  digital_io(DigitalIOs, true)
+		++ [ {analog_io_0, AnalogIO0}
 		    , {analog_io_1, AnalogIO1}
 		    , {hardware, version(HwVersion)}
 		    , {firmware, version(FwVersion)}
-		]]].
+		].
 
 expand_event2(<<"rf_tamper">>, MsgData, Address) ->
 	{Duration, Ended} = {MsgData bsr 8, MsgData band 16#ff},
@@ -339,12 +346,13 @@ expand_event2(<<"nack">>, MsgData, Address) ->
 	{CmdNum, Reason} = {MsgData bsr 8, MsgData band 16#ff},
 	[ {cmd_number, CmdNum}, {reason, nack_reason(Reason)},
 	  {msg_data, MsgData}, {locator, Address}];
-expand_event2(_, MsgData, Address) -> [{msg_data, MsgData}, {locator, Address}].
+expand_event2(_, MsgData, Address) ->
+	[{msg_data, MsgData}, {locator, Address}].
 
 %% Validate that this is done in correct order
 expand_cmd(16#01 = Arg, SetGPIOs0, ClearGPIOs0) ->
-	ClearGPIOs = [{K, 0} || {K, 1} <- digital_io(ClearGPIOs0)],
-	SetGPIOs = [V || {_, 1} = V <- digital_io(SetGPIOs0)],
+	ClearGPIOs = [{K, 0} || {K, 1} <- digital_io(ClearGPIOs0, false)],
+	SetGPIOs = [V || {_, 1} = V <- digital_io(SetGPIOs0, false)],
 
 	Outputs = lists:ukeymerge(1, ClearGPIOs, SetGPIOs),
 
@@ -353,8 +361,9 @@ expand_cmd(16#02 = Arg, PWM, _) ->
 	[{command, cmd_arg(Arg)}, {pwm, binary:decode_unsigned(PWM)}];
 expand_cmd(Arg, _, _) -> [{command, cmd_arg(Arg)}].
 
--spec digital_io(<<_:8>>) -> [digital_io_s(), ...].
-digital_io(<<D7:1, D6:1, D5:1, D4:1, D3:1, D2:1, D1:1, D0:1>>) ->
+-spec digital_io(<<_:8>>, boolean()) -> [digital_io_s(), ...].
+digital_io(<<D7:1, D6:1, D5:1, D4:1, D3:1, D2:1, D1:1, D0:1>>, Bin) ->
+	Out =
 		[ {0, D0}
 		, {1, D1}
 		, {2, D2}
@@ -362,10 +371,16 @@ digital_io(<<D7:1, D6:1, D5:1, D4:1, D3:1, D2:1, D1:1, D0:1>>) ->
 		, {4, D4}
 		, {5, D5}
 		, {6, D6}
-		, {7, D7}].
+		, {7, D7}],
 
-version(<<Major:8/integer, Min0:4/integer, Min1:4/integer>>) ->
-	<<Major:8, $., Min0:8, Min1>>.
+	case Bin of
+		true -> [{<<"digital_io_", ((K + 48))>>, V} || {K, V} <- Out];
+		false -> Out
+	end.
+
+version(<<_:4/integer, Major:4/integer, Min0:4/integer, Min1:4/integer>>) ->
+	[M0, M1, M2] = [list_to_binary(integer_to_list(X)) || X <- [Major, Min0, Min1]],
+	<<M0/binary, $., M1/binary, M2/binary>>.
 
 -spec serialize(msg_bin()) -> {ok, [buf()]} | {error, Reason :: term()}.
 serialize(Msg) ->
@@ -379,7 +394,7 @@ serialize(Msg) ->
 
 serialize(<<"command">>, Msg) ->
 	?match(Command, "command", Msg),
-	?match(UniqueID, "unique_id", Msg),
+	?match(UniqueID, "uid", Msg),
 	?match(CmdNum, "cmd_number", Msg),
 
 	case Command of
@@ -403,7 +418,77 @@ serialize(<<"command">>, Msg) ->
 			end
 	end;
 
-serialize(_, _Msg) ->
+serialize(<<"event">>, Msg) ->
+	?match(SystemID, "sid", Msg),
+	?match(UniqueID, "uid", Msg),
+	?match(RSSI, "rssi", Msg),
+	?match(NetworkLevel, "network_lvl", Msg),
+	?match(JumpCounter, "jump_count", Msg),
+	?match(PacketCounter, "packet_num", Msg),
+	?match(Latency, "latency", Msg),
+	?match(Detail, "detail", Msg),
+
+	Buf = case Detail of
+		<<"serial">> ->
+			Seq = case lists:keyfind(<<"sequence">>, 1, Msg) of
+				{<<"sequence">>, Seq0} -> Seq0;
+				false -> 0 end,
+			?match(Data, "serial", Msg),
+
+			<<16#10, Seq:8/integer, Data/binary>>;
+		_ ->
+			?match(MsgData, "msg_data", Msg),
+			?match(Locator, "locator", Msg),
+			?match(Temp, "temp", Msg),
+			?match(Volt0, "voltage", Msg),
+			?match(DigitalIO_0, "digital_io_0", Msg),
+			?match(DigitalIO_1, "digital_io_1", Msg),
+			?match(DigitalIO_2, "digital_io_2", Msg),
+			?match(DigitalIO_3, "digital_io_3", Msg),
+			?match(DigitalIO_4, "digital_io_4", Msg),
+			?match(DigitalIO_5, "digital_io_5", Msg),
+			?match(DigitalIO_6, "digital_io_6", Msg),
+			?match(DigitalIO_7, "digital_io_7", Msg),
+			?match(AnalogIO_0 , "analog_io_0", Msg),
+			?match(AnalogIO_1 , "analog_io_1", Msg),
+			?match(HW0 , "hardware", Msg),
+			?match(FW0 , "firmware", Msg),
+
+			Volt = erlang:trunc(((Volt0 / 0.03) / 100) / 0.01),
+			HW = <<((binary:first(HW0))), ((binary:at(HW0, 2))):4, ((binary:at(HW0, 3))):4>>,
+			FW = <<((binary:first(FW0))), ((binary:at(FW0, 2))):4, ((binary:at(FW0, 3))):4>>,
+
+			<<16#02
+			, ((event_detail(Detail))):8
+			, MsgData:16/unsigned-integer
+			, Locator:32/integer
+			, Temp:8/signed-integer
+			, Volt:8/unsigned-integer
+			, DigitalIO_7:1/integer
+			, DigitalIO_6:1/integer
+			, DigitalIO_5:1/integer
+			, DigitalIO_4:1/integer
+			, DigitalIO_3:1/integer
+			, DigitalIO_2:1/integer
+			, DigitalIO_1:1/integer
+			, DigitalIO_0:1/integer
+			, AnalogIO_0:16/integer
+			, AnalogIO_1:16/integer
+			, HW:2/binary
+			, FW:2/binary>> end,
+
+	{ok, [<<
+	  (size(Buf) + 16)
+	, SystemID:32/little-unsigned-integer
+	, UniqueID:32/little-unsigned-integer
+	, RSSI:8/unsigned-integer
+	, NetworkLevel:8/unsigned-integer
+	, JumpCounter:8/unsigned-integer
+	, PacketCounter:16/unsigned-integer
+	, Latency:16/unsigned-integer
+	, Buf/binary>>]};
+
+serialize(_Type, _Msg) ->
 	{error, msg_type}.
 
 serialize(<<"command">>, <<"set_output">> = Arg, Msg) ->
@@ -470,12 +555,12 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	unserialize_payload_serial_test() ->
 		Serial = <<"abc">>,
-		{ok, [Resp]} = unserialize(<<21, ?BASEMSG, 16, 0, Serial/binary>>),
+		{ok, [Resp], <<>>} = unserialize(<<21, ?BASEMSG, 16, 0, Serial/binary>>),
 		?assertEqual(Serial, proplists:get_value(<<"serial">>, Resp)).
 
 	unserialize_payload_event_test() ->
 		BinV = 16#bb,
-		{ok, [Resp]} = unserialize(<<35, ?BASEMSG, 02, 14, 0:32, 0, 0, 121, 187
+		{ok, [Resp], <<>>} = unserialize(<<35, ?BASEMSG, 02, 14, 0:32, 0, 0, 121, 187
 		                         , 0, 0:16, 0:16, 2, 0, 1, 22>>),
 		V = proplists:get_value(<<"voltage">>, Resp),
 		?assertEqual(V, erlang:trunc((BinV*0.03)*100)*0.01).
@@ -486,14 +571,14 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_serial_test() ->
 		io:format("~n+a: ~p~n-b: ~p", [{ok, [<<11, 1:32/little, 120, 17, "abcd">>]}, serialize([
-			  {<<"unique_id">>, 1}
+			  {<<"uid">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"serial">>}
 			, {<<"cmd_number">>, 120}
 			, {<<"data">>, <<"abcd">>}
 		])]),
 		?assertEqual({ok, [<<11, 1:32/little, 120, 17, "abcd">>]}, serialize([
-			  {<<"unique_id">>, 1}
+			  {<<"uid">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"serial">>}
 			, {<<"cmd_number">>, 120}
@@ -502,7 +587,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_get_status_test() ->
 		?assertEqual({ok, [<<10, 1:32/little, 122, 3, 17, 0, 0>>]}, serialize([
-			  {<<"unique_id">>, 1}
+			  {<<"uid">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"get_status">>}
 			, {<<"cmd_number">>, 122}
@@ -510,7 +595,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_get_config_test() ->
 		?assertEqual({ok, [<<10, 1:32/little, 123, 3, 19, 0, 0>>]}, serialize([
-			  {<<"unique_id">>, 1}
+			  {<<"uid">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"get_config">>}
 			, {<<"cmd_number">>, 123}
@@ -518,7 +603,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_get_cid_test() ->
 		?assertEqual({ok, [<<10, 1:32/little, 123, 3, 16, 0, 0>>]}, serialize([
-			  {<<"unique_id">>, 1}
+			  {<<"uid">>, 1}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"get_cid">>}
 			, {<<"cmd_number">>, 123}
@@ -526,7 +611,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_set_output_test() ->
 		Base = [
-			  {<<"unique_id">>, 123}
+			  {<<"uid">>, 123}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"set_output">>}
 			, {<<"cmd_number">>, 124}
@@ -551,13 +636,13 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_set_pwm_test() ->
 		?assertEqual({error, {missing_field, pwm}}, serialize([
-			  {<<"unique_id">>, 123}
+			  {<<"uid">>, 123}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"set_pwm">>}
 			, {<<"cmd_number">>, 125}
 		])),
 		?assertEqual({ok, [<<10, 123, 0, 0, 0, 126, 3, 2, 50, 0>>]}, serialize([
-			  {<<"unique_id">>, 123}
+			  {<<"uid">>, 123}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"set_pwm">>}
 			, {<<"cmd_number">>, 126}
@@ -567,7 +652,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 	serialize_error_test_() ->
 		[ {"unknown type", ?_test(begin
 			Payload = [
-				  {<<"unique_id">>, 123}
+				  {<<"uid">>, 123}
 				, {<<"type">>, <<"no-such-command">>}
 				, {<<"command">>, unknown_command_atom}
 				, {<<"cmd_number">>, 127}],
@@ -575,7 +660,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 		  end)}
 		, {"unknown command", ?_test(begin
 			Payload = [
-				  {<<"unique_id">>, 123}
+				  {<<"uid">>, 123}
 				, {<<"type">>, <<"command">>}
 				, {<<"command">>, <<"unknown_command_atom">>}
 				, {<<"cmd_number">>, 128}
@@ -583,7 +668,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 			?assertEqual({error, unknown_command}, serialize(Payload))
 		  end)}
 		, {"missing destination", ?_test(begin
-			?assertEqual({error, {missing_field, unique_id}}, serialize([
+			?assertEqual({error, {missing_field, uid}}, serialize([
 				  {<<"type">>, <<"command">>}
 				, {<<"cmd_number">>, 129}
 				, {<<"command">>, serial}
@@ -593,7 +678,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_set_config_test() ->
 		A = serialize([
-			  {<<"unique_id">>, 123}
+			  {<<"uid">>, 123}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"set_config">>}
 			, {<<"cmd_number">>, 130}
@@ -606,7 +691,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_set_output_binary_test() ->
 		Base = [
-		  {<<"unique_id">>,     6}
+		  {<<"uid">>,           6}
 		, {<<"type">>,          <<"command">>}
 		, {<<"command">>,       <<"set_output">>}
 		, {<<"cmd_number">>, 0}],
@@ -615,7 +700,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 
 	serialize_test() ->
 		Payload  = [
-			  {<<"unique_id">>, 2}
+			  {<<"uid">>, 2}
 			, {<<"type">>, <<"command">>}
 			, {<<"command">>, <<"serial">>}
 			, {<<"cmd_number">>, 131}
@@ -623,7 +708,7 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 		],
 		Payload2 = [
 			  {<<"type">>, <<"command">>}
-			, {<<"unique_id">>, 3}
+			, {<<"uid">>, 3}
 			, {<<"cmd_number">>, 132}
 			, {<<"command">>, <<"get_status">>}
 		],

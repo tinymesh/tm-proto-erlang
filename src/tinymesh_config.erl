@@ -54,8 +54,8 @@
 	{gpio_1_lo_lo_triggerlevel, 41, 1, int},   {gpio_1_sample_rate,        42, 1, int},
 	{cts_hold_time,             43, 1, int},   {locator,                   44, 1, int},
 	{node_id,                   45, 4, int},   {system_id,                 49, 4, int},
-	{baud_rate,                 53, 1, int},   {model,                     60, 8, binary},
-	{hw_version,                75, 3, vsn},   {fw_version,                77, 3, vsn},
+	{baud_rate,                 53, 1, int},   {model,                     60, 10, binary},
+	{hw_version,                73, 3, vsn},   {fw_version,                75, 3, vsn},
 	{ima_on_connect,            94, 1, int},   {pwm_default,               95, 1, int}]
 ).
 

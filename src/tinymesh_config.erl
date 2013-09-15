@@ -55,7 +55,7 @@
 	{cts_hold_time,             43, 1, int},   {locator,                   44, 1, int},
 	{node_id,                   45, 4, int},   {system_id,                 49, 4, int},
 	{baud_rate,                 53, 1, int},   {model,                     60, 10, binary},
-	{hw_version,                73, 3, vsn},   {fw_version,                75, 3, vsn},
+	{hw_version,                70, 4, binary},{fw_version,                75, 4, binary},
 	{ima_on_connect,            94, 1, int},   {pwm_default,               95, 1, int}]
 ).
 
@@ -86,10 +86,7 @@ unpack(Data, Acc, N) ->
 					{Tail0, Val0};
 				binary ->
 					<<Val0:Len/binary-unit:8, Tail0/binary>> = Data,
-					{Tail0, Val0};
-				vsn ->
-					<<Maj:8/integer, Min0:8/integer, Min1:8/integer, Tail0/binary>> = Data,
-					{Tail0, <<((Maj + 48)), $., ((Min0 + 48)), ((Min1 + 48))>>}
+					{Tail0, Val0}
 				end,
 			unpack(Tail, [{Key, Val}|Acc], N + Len);
 		[] ->
@@ -138,9 +135,9 @@ pack_val({Key, Value}) when is_binary(Value) ->
 		%% Test unpacking a single integer value
 		?assertEqual([{rf_channel, 1}], unpack(<<1:8>>)),
 		%% Test float value, it defaults to 2-digit precision
-		?assertEqual([{hw_version, <<"1.23">>}], unpack(<<1,2,3>>, [], 75)),
+		?assertEqual([{fw_version, <<"1.23">>}], unpack(<<"1.23">>, [], 75)),
 		%% Test string value
-		?assertEqual([{model, <<"model123">>}], unpack(<<"model123">>, [], 60)),
+		?assertEqual([{model, <<"RCXXXXTMHP">>}], unpack(<<"RCXXXXTMHP">>, [], 60)),
 		%% Validate 1 whole config
 		Config = [ 16#01, 16#00, 16#00, 16#00, 16#02, 16#01, 16#00, 16#00, 16#83,
 			16#01, 16#01, 16#00, 16#06, 16#00, 16#06, 16#02, 16#21, 16#07, 16#05,
@@ -170,18 +167,21 @@ pack_val({Key, Value}) when is_binary(Value) ->
 		%% Test multi-byte fields are packed correctly
 		M = 16#FF,
 		[P] = [B || {hw_version, B, _, _} <- ?CONFIGPARAMS],
-		?assertEqual([[P,0], [P+1,1], [P+2,1]], pack_val({hw_version, 16#101})),
-		?assertEqual([[P,2], [P+1,0], [P+2,1]], pack_val({hw_version, 16#20001})),
-		?assertEqual([[P,M], [P+1,M], [P+2,M]], pack_val({hw_version, 16#FFFFFF})),
-		?assertEqual([], pack_val({hw_version, 16#FFFFFFFF})),
+		?assertEqual([[P,0], [P+1,0], [P+2,1], [P+3,1]]
+			, pack_val({hw_version, 16#101})),
+		?assertEqual([[P,2], [P+1,1], [P+2,0], [P+3,1]]
+			, pack_val({hw_version, 16#02010001})),
+		?assertEqual([[P,M], [P+1,M], [P+2,M], [P+3,M]]
+			, pack_val({hw_version, 16#FFFFFFFF})),
+		?assertEqual([], pack_val({hw_version, 16#FFFFFFFFFF})),
 
 		%% Test string fields
-		StringMatch = [[A, 0]|| A <- lists:seq(60, 64)]
-		               ++ [[65, $a], [66, $b], [67, $c]],
+		StringMatch = [[A, 0]|| A <- lists:seq(60, 66)]
+		               ++ [[67, $a], [68, $b], [69, $c]],
 		?assertEqual(StringMatch, pack_val({model, "abc"})).
 
 	pack_test() ->
-		?assert([[[0,1]], [[1,2]], [[2,2]], [[3,1]]] == pack(
+		?assertEqual([[[0,1]], [[1,2]], [[2,2]], [[3,1]]], pack(
 			[{rf_channel,    1},
 		   {rf_power,      2},
 		   {rf_data_rate,  2},
@@ -189,7 +189,7 @@ pack_val({Key, Value}) when is_binary(Value) ->
 		])),
 
 		%% Assert non existing parameters is not included
-		?assert([[[0,1]], [[1,2]], [[3,1]]] == pack(
+		?assertEqual([[[0,1]], [[1,2]], [[3,1]]], pack(
 			[{rf_channel,    1},
 		   {rf_power,      2},
 		   {non_existing,  2},
@@ -197,10 +197,10 @@ pack_val({Key, Value}) when is_binary(Value) ->
 		])),
 
 		%% Assert out of bounds variables is not included
-		?assert([[[0,1]], [[1,2]]] == pack(
-			[{rf_channel,   1},
+		?assertEqual([[[0,1]], [[1,2]]], pack(
+		[{rf_channel,   1},
 		   {rf_power,     2},
 		   {rf_power,     -1},
-		   {hw_version,   16#FFFFFFF}
+		   {hw_version,   16#FFFFFFFFF}
 		])).
 -endif.

@@ -53,7 +53,7 @@ general_event_toway_test() ->
 	Nodes = lists:map(fun(N) ->
 		?pd(networklvl, N, random:uniform(10)),
 		?pd(jump_count, N, random:uniform(10)),
-		?pd(packetnumber, N, random:uniform(16#FFFF)),
+		?pd(packet_num, N, random:uniform(16#FFFF)),
 		N
 	end, lists:seq(0, 100)),
 
@@ -70,7 +70,7 @@ msg_base(ID, Rest) ->
 	[ {<<"sid">>, ?sysid}, {<<"uid">>, ID}
 	, {<<"rssi">>, random:uniform(255)}, {<<"network_lvl">>, ?pd(networklvl, ID)}
 	, {<<"jump_count">>, ?pd(jump_count, ID)}, {<<"latency">>, random:uniform(512)}
-	, {<<"packet_number">>, ?pdi(packetnumber, ID) rem 16#FFFF} | Rest ].
+	, {<<"packet_num">>, ?pdi(packet_num, ID)} | Rest ].
 
 %% event:serial
 create_msg(1, N, Y) ->

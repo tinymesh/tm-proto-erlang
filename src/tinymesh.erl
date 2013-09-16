@@ -309,6 +309,8 @@ expand_event(<<"get_path">>, <<_:8, UniqueID>>) ->
 	[{path, UniqueID}];
 expand_event(<<"get_config">>, Config) ->
 	[{config, tinymesh_config:unpack(Config)}];
+expand_event(<<"nack">>, <<CmdNum:16/unsigned-integer>>) ->
+	[{cmd_number, CmdNum}];
 expand_event(Detail,
 	<<MsgData:16/unsigned-integer,
 	  Address:32/integer,

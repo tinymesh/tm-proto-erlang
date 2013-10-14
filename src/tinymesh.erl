@@ -183,7 +183,8 @@ proc(<<Checksum:8/unsigned-integer,
 
 		Detail = event_detail(Detail0),
 		Msg0 = [
-			  {sid, SystemID}
+			  {'_raw', to_hex(binary:part(PBuf, {0, Checksum}))}
+			, {sid, SystemID}
 			, {uid, UniqueID}
 			, {rssi, RSSI}
 			, {network_lvl, NetworkLevel}
@@ -209,13 +210,14 @@ proc(<<Checksum:8/unsigned-integer,
        Latency:16/unsigned-integer,         % Time since msg creation (10ms)
        16#10,                               % Message type: serial
        Seq:8/unsigned-integer,
-       Buf/binary>>, Acc) ->
+       Buf/binary>> = PBuf, Acc) ->
 
 	PayloadSize = Checksum - 18,
 	<<Payload:PayloadSize/binary, Rest/binary>> = Buf,
 
 	Msg = [
-		  {sid, SystemID}
+		  {'_raw', to_hex(binary:part(PBuf, {0, Checksum}))}
+		, {sid, SystemID}
 		, {uid, UniqueID}
 		, {rssi, RSSI}
 		, {network_lvl, NetworkLevel}
@@ -231,13 +233,13 @@ proc(<<Checksum:8/unsigned-integer,
 	proc(Rest, [Msg | Acc]);
 
 %% command:set_config
-proc(<<_Checksum:8/unsigned-integer,
+proc(<<Checksum:8/unsigned-integer,
        UniqueID:32/little-unsigned-integer, % Destination address
        CmdNum:8/unsigned-integer,
        16#03,
        16#03,
        Config0:32/binary,
-       Rest/binary>>, Acc) ->
+       Rest/binary>> = PBuf, Acc) ->
 
 	{_, Config} = lists:foldl(fun
 		(K, {false, Cfg}) ->
@@ -250,7 +252,8 @@ proc(<<_Checksum:8/unsigned-integer,
 	end, {false, []}, binary:bin_to_list(Config0)),
 
 	Msg = [
-		  {uid, UniqueID}
+		  {'_raw', to_hex(binary:part(PBuf, {0, Checksum}))}
+		, {uid, UniqueID}
 		, {cmd_number, CmdNum}
 		, {type, <<"command">>}
 		, {command, <<"set_config">>}
@@ -263,13 +266,14 @@ proc(<<Checksum:8/unsigned-integer,
        UniqueID:32/little-unsigned-integer, % Destination address
        CmdNum:8/unsigned-integer,
        16#11,
-       Buf/binary>>, Acc) ->
+       Buf/binary>> = PBuf, Acc) ->
 
 	PayloadSize = Checksum - 7,
 	<<Payload:PayloadSize/binary, Rest/binary>> = Buf,
 
-	Msg =
-		[ {uid, UniqueID}
+	Msg = [
+		  {'_raw', to_hex(binary:part(PBuf, {0, Checksum}))}
+		, {uid, UniqueID}
 		, {cmd_number, CmdNum}
 		, {type, <<"command">>}
 		, {command, <<"serial">>}
@@ -279,17 +283,18 @@ proc(<<Checksum:8/unsigned-integer,
 	proc(Rest, [Msg | Acc]);
 
 %% command:*
-proc(<<_Checksum:8/unsigned-integer,
+proc(<<Checksum:8/unsigned-integer,
        UniqueID:32/little-unsigned-integer, % Destination address
        CmdNum:8/unsigned-integer,
        16#03,
        Arg:8,
        Data1:8/binary-unit:1,
        Data2:8/binary-unit:1,
-       Rest/binary>>, Acc) ->
+       Rest/binary>> = PBuf, Acc) ->
 
 	Msg = [
-		  {uid, UniqueID}
+		  {'_raw', to_hex(binary:part(PBuf, {0, Checksum}))}
+		, {uid, UniqueID}
 		, {cmd_number, CmdNum}
 		, {type, <<"command">>}
 		| expand_cmd(Arg, Data1, Data2)],
@@ -543,6 +548,13 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 	      , 0:(32-byte_size(Buf))/integer-unit:8>>,
 
 	build_set_config(Rest, UniqueID, CmdNum, [Msg | Acc0]).
+
+
+to_hex(Str) ->
+	iolist_to_binary([begin
+		Z = <<"00", (integer_to_binary(Y, 16))/binary>>,
+		binary:part(Z, {size(Z), -2})
+	 end || Y <- binary_to_list(Str)]).
 
 -ifdef(TEST).
 	-include_lib("eunit/include/eunit.hrl").

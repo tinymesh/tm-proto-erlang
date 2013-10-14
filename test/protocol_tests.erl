@@ -33,7 +33,7 @@ cmd_twoway_test() ->
 		{ok, [M2], <<>>}  = tinymesh:unserialize(Buf),
 
 		?assertEqual(
-			lists:usort(Item),
+			lists:usort([{<<"_raw">>, to_hex(Buf)} | Item]),
 			lists:usort(M2)),
 
 		{[Buf | AccB], [M2 | AccI]}
@@ -62,7 +62,7 @@ general_event_toway_test() ->
 		M0 = lists:ukeysort(1, create_msg(N + Y band 32 bsr 7, N, Y)),
 		{ok, [M1]} = tinymesh:serialize(M0),
 		{ok, [M2], <<>>} = tinymesh:unserialize(M1),
-		?assertEqual(M0, lists:ukeysort(1, M2))
+		?assertEqual([{<<"_raw">>, to_hex(M1)} | M0], lists:ukeysort(1, M2))
 	end, lists:seq(0, 500)) || N <- Nodes].
 
 
@@ -137,7 +137,7 @@ frame_long_serial_test() ->
 	Num = lists:foldl(fun(Item, I) ->
 		Match0 = lists:ukeysort(1, Fun(I, binary:copy(<<"a">>, 120))),
 		{ok, [Match1], <<>>} = tinymesh:unserialize(Item),
-		?assertEqual(Match0, lists:ukeysort(1, Match1)),
+		?assertEqual([{<<"_raw">>, to_hex(Item)} | Match0], lists:ukeysort(1, Match1)),
 		I + 1
 	end, CmdNum, Items),
 	?assertEqual(NumItems, Num - CmdNum),
@@ -163,7 +163,7 @@ unserialize_config_test() ->
 
 	      Match0   = lists:ukeysort(1, Msg([{<<"rf_power">>, 10}])),
 	{ok, [Match1], <<>>} = tinymesh:unserialize(Buf),
-	?assertEqual(Match0, lists:ukeysort(1, Match1)).
+	?assertEqual([{<<"_raw">>, to_hex(Buf)} | Match0], lists:ukeysort(1, Match1)).
 
 %	?assertEqual(
 %		  {error, {invalid_config_index, unknown_key}}
@@ -190,3 +190,9 @@ split_config_test() ->
 		, {<<"config">>, Config} ],
 
 	?assertMatch({ok, [_,_]}, tinymesh:serialize(Msg)).
+
+to_hex(Str) ->
+	iolist_to_binary([begin
+		Z = <<"00", (integer_to_binary(Y, 16))/binary>>,
+		binary:part(Z, {size(Z), -2})
+	 end || Y <- binary_to_list(Str)]).

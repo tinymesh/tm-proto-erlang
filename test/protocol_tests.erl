@@ -20,7 +20,7 @@ cmd_twoway_test() ->
 	  Cmd(<<"set_output">>, 1, 2, [{<<"output">>, [{1,0}, {3,1}]}])
 	, Cmd(<<"set_pwm">>, 2, 3, [{<<"pwm">>, 123}])
 	, Cmd(<<"init_gw_config">>, 3, 4, [])
-	, Cmd(<<"get_cid">>, 4, 5, [])
+	, Cmd(<<"get_nid">>, 4, 5, [])
 	, Cmd(<<"get_status">>, 5, 6, [])
 	, Cmd(<<"get_did_status">>, 6, 7, [])
 	, Cmd(<<"get_config">>, 7, 8, [])

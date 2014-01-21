@@ -58,7 +58,7 @@ Fun(N) when is_integer(N) ->
 	, {16#02, <<"set_pwm">>}
 	, {16#03, <<"set_config">>}
 	, {16#05, <<"init_gw_config">>}
-	, {16#10, <<"get_cid">>}
+	, {16#10, <<"get_nid">>}
 	, {16#11, <<"get_status">>}
 	, {16#12, <<"get_did_status">>}
 	, {16#13, <<"get_config">>}
@@ -100,7 +100,7 @@ Fun(N) when is_integer(N) ->
 	, {16#0E, <<"zacima">>}
 	, {16#10, <<"ack">>}
 	, {16#11, <<"nack">>}
-	, {16#12, <<"get_cid">>}
+	, {16#12, <<"get_nid">>}
 	, {16#20, <<"get_path">>}
 	, {16#21, <<"get_config">>}
 	]).
@@ -115,7 +115,7 @@ handshake(PacketNumber) ->
 	tinymesh:serialize([
 		  {<<"uid">>,           0}
 		, {<<"type">>,          <<"command">>}
-		, {<<"command">>,       <<"get_cid">>}
+		, {<<"command">>,       <<"get_nid">>}
 		, {<<"cmd_number">>,    PacketNumber}
 	]).
 
@@ -607,11 +607,11 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 			, {<<"cmd_number">>, 123}
 			])).
 
-	serialize_get_cid_test() ->
+	serialize_get_nid_test() ->
 		?assertEqual({ok, [<<10, 1:32/little, 123, 3, 16, 0, 0>>]}, serialize([
 			  {<<"uid">>, 1}
 			, {<<"type">>, <<"command">>}
-			, {<<"command">>, <<"get_cid">>}
+			, {<<"command">>, <<"get_nid">>}
 			, {<<"cmd_number">>, 123}
 			])).
 

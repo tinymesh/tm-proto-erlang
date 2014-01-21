@@ -316,7 +316,7 @@ expand_event(<<"nack">>, <<CmdNum:16/unsigned-integer>>) ->
 expand_event(Detail,
 	<<MsgData:16/unsigned-integer,
 	  Address:32/integer,
-	  Temp:8/signed-integer,
+	  Temp:8/unsigned-integer,
 	  Voltage0:8/unsigned-integer,
 	  DigitalIOs:8/binary-unit:1,
 	  AnalogIO0:16/unsigned-integer,
@@ -329,7 +329,7 @@ expand_event(Detail,
 
 	Base
 		++ [
-		  {temp, Temp}
+		  {temp, Temp - 128}
 		, {voltage, Voltage}]
 		++  digital_io(DigitalIOs, true)
 		++ [ {analog_io_0, AnalogIO0}
@@ -443,7 +443,7 @@ serialize(<<"event">>, Msg) ->
 		_ ->
 			?match(MsgData, "msg_data", Msg),
 			?match(Locator, "locator", Msg),
-			?match(Temp, "temp", Msg),
+			?match(Temp0, "temp", Msg),
 			?match(Volt0, "voltage", Msg),
 			?match(DigitalIO_0, "digital_io_0", Msg),
 			?match(DigitalIO_1, "digital_io_1", Msg),
@@ -458,6 +458,8 @@ serialize(<<"event">>, Msg) ->
 			?match(HW0 , "hardware", Msg),
 			?match(FW0 , "firmware", Msg),
 
+			Temp = Temp0 + 128,
+
 			Volt = erlang:trunc(((Volt0 / 0.03) / 100) / 0.01),
 			HW = <<((binary:first(HW0))), ((binary:at(HW0, 2))):4, ((binary:at(HW0, 3))):4>>,
 			FW = <<((binary:first(FW0))), ((binary:at(FW0, 2))):4, ((binary:at(FW0, 3))):4>>,
@@ -466,7 +468,7 @@ serialize(<<"event">>, Msg) ->
 			, ((event_detail(Detail))):8
 			, MsgData:16/unsigned-integer
 			, Locator:32/integer
-			, Temp:8/signed-integer
+			, Temp:8/unsigned-integer
 			, Volt:8/unsigned-integer
 			, DigitalIO_7:1/integer
 			, DigitalIO_6:1/integer

@@ -9,7 +9,7 @@ all: deps compile
 deps:
 	$(REBAR) get-deps
 
-compile:
+compile: ebin/Elixir.Tinymesh.Config.beam
 	$(REBAR) compile
 
 clean:
@@ -37,3 +37,6 @@ test:
 
 distclean: clean
 	$(REBAR) delete-deps
+
+ebin/Elixir.Tinymesh.Config.beam: priv/config priv/generate-erl-config.exs
+	priv/generate-erl-config.exs priv/config

@@ -124,7 +124,7 @@ ack() ->
 	{ok, <<6>>}.
 
 -spec unserialize(stream()) -> {ok, [msg_ext()], buf()} | {error, Reason :: term()}.
-unserialize(<<Chksum:8, _/binary>> = Buf) when byte_size(Buf) >= Chksum ->
+unserialize(<<Chksum:8, _/binary>> = Buf) when byte_size(Buf) >= Chksum; Chksum > 0 ->
 	try proc(Buf) of
 		{ok, Msgs0, Rest} ->
 			Msgs = lists:reverse(Msgs0),

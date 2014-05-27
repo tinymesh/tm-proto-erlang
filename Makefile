@@ -33,7 +33,7 @@ dialyzer: compile
 
 
 test:
-	$(REBAR) skip_deps=true eunit suite=$(suite)
+	$(REBAR) skip_deps=true eunit suites=$(suite)
 
 distclean: clean
 	$(REBAR) delete-deps

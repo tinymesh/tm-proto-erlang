@@ -156,6 +156,12 @@ map_elem({K, V}) when is_atom(K) ->
 	{atom_to_binary(K, utf8), V};
 map_elem(Ret) -> Ret.
 
+add_unique(E, Acc) ->
+	case lists:member(E, Acc) of
+		true  -> Acc;
+		false -> [E | Acc]
+	end.
+
 proc(Buf) ->
 	proc(Buf, []).
 
@@ -195,7 +201,7 @@ proc(<<Checksum:8/unsigned-integer,
 			],
 
 		Msg = Msg0 ++ expand_event(Detail, Payload),
-		proc(Rest, [Msg | Acc])
+		proc(Rest, add_unique(Msg, Acc))
 	end;
 
 %% event:serial
@@ -228,7 +234,7 @@ proc(<<Checksum:8/unsigned-integer,
 		, {sequence, Seq}
 		],
 
-	proc(Rest, [Msg | Acc]);
+	proc(Rest, add_unique(Msg, Acc));
 
 %% command:set_config
 proc(<<_Checksum:8/unsigned-integer,
@@ -256,7 +262,7 @@ proc(<<_Checksum:8/unsigned-integer,
 		, {command, <<"set_config">>}
 		, {config, Config}],
 
-	proc(Rest, [Msg | Acc]);
+	proc(Rest, add_unique(Msg, Acc));
 
 %% command:serial
 proc(<<Checksum:8/unsigned-integer,
@@ -276,7 +282,7 @@ proc(<<Checksum:8/unsigned-integer,
 		, {data, Payload}
 		],
 
-	proc(Rest, [Msg | Acc]);
+	proc(Rest, add_unique(Msg, Acc));
 
 %% command:*
 proc(<<_Checksum:8/unsigned-integer,
@@ -294,7 +300,7 @@ proc(<<_Checksum:8/unsigned-integer,
 		, {type, <<"command">>}
 		| expand_cmd(Arg, Data1, Data2)],
 
-	proc(Rest, [Msg | Acc]);
+	proc(Rest, add_unique(Msg, Acc));
 
 proc(<<_/binary>>, []) ->
 	{error, invalid_data};
@@ -570,6 +576,13 @@ build_set_config(Config0, UniqueID, CmdNum, Acc0) ->
 		                         , 0, 0:16, 0:16, 2, 0, 1, 22>>),
 		V = proplists:get_value(<<"voltage">>, Resp),
 		?assertEqual(V, erlang:trunc((BinV*0.03)*100)*0.01).
+
+	unserialize_unique_test() ->
+		BinV = 16#bb,
+		Buf = <<35, ?BASEMSG, 02, 14, 0:32, 0, 0, 121, 187, 0, 0:16, 0:16, 2, 0, 1, 22,
+		        35, ?BASEMSG, 02, 14, 0:32, 0, 0, 121, 187, 0, 0:16, 0:16, 2, 0, 1, 22>>,
+
+		?assertMatch({ok, [Resp], <<>>}, unserialize(Buf)).
 
 	unserialize_payload_unknown_test() ->
 		?assertEqual({error, invalid_data}, unserialize(<<35, ?BASEMSG, 20, 14
